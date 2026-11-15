@@ -94,7 +94,7 @@ Never say "all pages are done" unless every item in the current inventory has be
 ## Safety and project constraints
 
 - Work only on the existing `main` branch. Never create another branch.
-- Do not touch API key values, Supabase secrets, environment files or signing credentials.
+- Do not touch API key values, environment files or signing credentials.
 - Do not weaken authentication, RLS, approvals, connector scopes or permission boundaries.
 - Do not change model routing, streaming, storage or backend contracts for a visual task.
 - Keep ULTRON separate from Luo Chat.

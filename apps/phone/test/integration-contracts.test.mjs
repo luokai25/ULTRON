@@ -30,7 +30,6 @@ const [html, main, semanticGraph, skillsEngine, localAI, runtime, capabilityKern
   read("../../ultron-backend/ultron_backend/agents.py"),
   read("src/chatgpt-ui.css"),
 ]);
-const [capabilityPanel, runtimeCloud] = await Promise.all([read("src/capability-panel.ts"), read("src/runtime-cloud.ts")]);
 
 test("every required phone UI selector exists exactly once", () => {
   const requiredIds = [...main.matchAll(/req<[^>]+>\("#([^"]+)"\)/g)].map((match) => match[1]);
@@ -185,9 +184,6 @@ test("Android companion uses scoped user handoffs and optional notifications wit
   assert.match(main, /parsed\.tool === "app\.open"/);
   assert.match(main, /client_capabilities: \[/);
   assert.match(main, /Capacitor\.getPlatform\(\) === "android" \? \["android_phone_actions"\] : \[\]/);
-  assert.match(main, /"ultron_supabase_capabilities",\s*"ultron_supabase_runtime"/);
-  assert.doesNotMatch(main, /cloudSession \? \["ultron_supabase_capabilities"/);
-  assert.match(main, /getCloudSession\(\)/);
   assert.match(main, /nativePhoneIntent/);
   assert.match(main, /handleNativeTool/);
   assert.match(main, /ANDROID_PHONE_TOOL_RESULT/);
@@ -534,34 +530,10 @@ test("semantic memory refuses unsourced, low-confidence, and credential-bearing 
 });
 
 
-test("Supabase is the default shared runtime for ULTRON-authored tools and skills", () => {
-  assert.match(main, /ultron_supabase_runtime/);
-  assert.match(main, /runtime\.tool\.create/);
-  assert.match(main, /runtime\.tool\.run/);
-  assert.match(main, /skills\.cloud\.save/);
-  assert.match(main, /database\.ddl/);
-  assert.match(main, /database\.rpc/);
-  assert.match(main, /allowAnotherTool/);
-  assert.match(main, /cloudToolDepth/);
-  assert.match(main, /Maximum eight tool calls total/);
-  assert.match(main, /invokeUltronRuntime/);
-  assert.match(runtimeCloud, /fetch\(/);
-  assert.match(runtimeCloud, /apikey:\s*ULTRON_SUPABASE_PUBLISHABLE_KEY/);
-  assert.doesNotMatch(runtimeCloud, /getCloudSession|functions\.invoke\("ultron-runtime"/);
-  assert.match(capabilityPanel, /runtimeInvoke\("list_tools"/);
-  assert.match(capabilityPanel, /runtimeInvoke\("list_tool_runs"/);
-  assert.match(capabilityPanel, /runtimeInvoke\("list_skills"/);
-  assert.match(html, /id="capability-cloud-tools"/);
-  assert.match(html, /id="capability-tool-runs"/);
-  assert.match(html, /id="capability-cloud-skills"/);
-});
-
-
 test("chat uses Automatic by default and exposes only imported local models in the picker", async () => {
-  const [main, cloudLlm, brain] = await Promise.all([
+  const [main, cloudLlm] = await Promise.all([
     read("src/main.ts"),
     read("src/cloud-llm.ts"),
-    read("../../supabase/functions/ultron-brain/index.ts"),
   ]);
   assert.match(main, /ultron\.chat\.auto-routing-migrated\.v2/);
   assert.match(main, /ULTRON · Automatic/);
@@ -580,7 +552,5 @@ test("chat uses Automatic by default and exposes only imported local models in t
   assert.match(cloudLlm, /streamProviderChat/);
   assert.doesNotMatch(cloudLlm, /functions\/v1\/ultron-brain|ULTRON_SUPABASE_PUBLISHABLE_KEY/);
   assert.doesNotMatch(cloudLlm, /getCloudSession\(\)|session\.access_token/, "public chat must not require a visitor account");
-  assert.match(main, /cloudCheckpointAvailable/);
-  assert.match(main, /optional cloud checkpoint sync was unavailable/);
-  assert.match(brain, /const automaticCandidates = eligibleRows\.flatMap/);
+  assert.match(cloudLlm, /const candidates = candidateGroups\.flat\(\)\.sort/);
 });

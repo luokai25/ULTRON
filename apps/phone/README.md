@@ -1,30 +1,30 @@
 # ULTRON client
 
-This is the only ULTRON client. It is a Vite + TypeScript web app and the source bundled into the Capacitor Android APK.
+This is the ULTRON app: a Vite + TypeScript client bundled into the Capacitor Android APK.
 
-## Production
+## Delivery
 
-- Web: https://ultron-pied-gamma.vercel.app/
-- Android: GitHub Actions publishes APK releases from `main`.
-- Cloud: Supabase project `vshoxrtrfleptqxkrmtc`.
-
-Vercel serves this app directly. Do not route it through Cloudflare or deploy a second web frontend.
+- Android: GitHub Actions publishes signed APK releases from `main`.
+- There is no web deployment and no hosted server; everything runs on the device.
 
 ## Main capabilities
 
-- Streaming cloud chat with ULTRON Automatic model routing.
+- Streaming chat with Automatic routing across the free-tier providers you hold keys for.
 - Android-local llama.cpp inference and GGUF / `.tgz` model imports.
 - Conversation history, memory, model library and provider key management.
-- Connector catalog, agent workspace and background tasks.
-- Private artifacts and AI Product Studio / Offer Builder.
+- Plugins (Gmail, Google Calendar, Google Drive) connected through Google's Android authorization.
+- Files ULTRON creates, stored privately on the device.
 - Android companion, voice and task-monitor integrations.
 
 ## Source layout
 
 - `index.html` — app shell, navigation, chat and feature screens
 - `src/main.ts` — app startup, chat orchestration and screen wiring
-- `src/cloud-llm.ts` — direct Supabase brain requests and streaming
-- `src/cloud-sync.ts` — Supabase project configuration and optional state sync
+- `src/cloud-llm.ts` — Automatic routing across provider keys and streaming
+- `src/provider-adapters.ts`, `src/provider-transport.ts` — direct provider calls (native HTTPS on Android)
+- `src/usage-ledger.ts`, `src/free-tier-limits.ts` — per-key load tracking and free-capacity estimate
+- `src/plugins/`, `src/plugins-ui.ts` — on-device plugins and the Plugins screen
+- `src/local-artifacts.ts` — private on-device file storage
 - `src/styles.css`, `src/chatgpt-ui.css` — shared web and Android styling
 - `src/ultron-persona.ts` — stable ULTRON identity and response presentation
 - `android/` — native Capacitor project, llama.cpp integration and companion services
@@ -59,10 +59,8 @@ cd apps/phone/android
 gradle assembleRelease
 ```
 
-## Cloud and optional backend
+## Providers and keys
 
-Primary cloud chat calls the Supabase `ultron-brain` Edge Function directly. Visitors do not need to sign in. Provider credentials are loaded server-side from Supabase Vault.
+Chat calls AI providers directly from the device. Provider keys are stored in an encrypted on-device vault; keys that ship inside a build come from the `ULTRON_BUNDLED_KEYS` repository secret at build time and are never committed. Keep API keys out of this repository.
 
-The optional Python control plane in `ultron-backend` provides agent sessions, background task execution and connector operations. It is not required for primary chat. See [its README](../../ultron-backend/README.md).
-
-Keep API keys out of this repository, browser storage, Vercel frontend variables and the APK.
+The optional Python service in `ultron-backend` is for desktop agent sessions only. See [its README](../../ultron-backend/README.md).

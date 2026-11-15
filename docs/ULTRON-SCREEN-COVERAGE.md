@@ -3,7 +3,6 @@
 This is the authoritative screen inventory for the one shared web and Android client. It records what must be checked; it does not claim that every item has passed visual or device QA.
 
 **Canonical client:** `apps/phone`  
-**Web host:** Vercel  
 **Android:** Capacitor APK  
 **Design authority:** `DESIGN.md`  
 **Workflow:** `.agents/skills/ultron-gstack/SKILL.md` and `.agents/skills/ultron-design/SKILL.md`
@@ -104,10 +103,8 @@ The six full-screen destinations in `apps/phone/index.html` are:
 | --- | --- |
 | Agent identities | `agent-identities-screen` |
 | LLM API keys | `llm-api-keys-screen` |
-| AI Product Studio | `product-studio-screen` |
 | Memory / Vault | `vault-screen` |
 | Learning Review | `learning-screen` |
-| ULTRON Capabilities | `capabilities-screen` |
 
 Other major screen and surface IDs include:
 
@@ -120,7 +117,6 @@ Other major screen and surface IDs include:
 
 ## Cross-surface acceptance
 
-- [ ] Vercel web build and Android WebView show the same features and behavior.
 - [ ] Android safe areas, system back, keyboard resize and file chooser work.
 - [ ] Desktop is an intentional layout, not a stretched phone screen.
 - [ ] Provider credentials remain in Vault and never appear in browser storage or the APK.

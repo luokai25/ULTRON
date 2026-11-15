@@ -48,7 +48,7 @@ jobs:
       - name: Lint
         run: pnpm --filter @ultron/phone lint
       - name: Test
-        run: pnpm --filter @ultron/phone test && node --test supabase/tests/*.test.mjs
+        run: pnpm --filter @ultron/phone test
       - name: Build web client
         run: pnpm --filter @ultron/phone build
 
@@ -76,20 +76,6 @@ jobs:
         working-directory: ultron-backend
         run: python -m pytest -q
 
-  edge-artifact-formats:
-    name: Supabase artifact format tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.1.4
-      - name: Test native Office artifact packages
-        run: deno test --node-modules-dir=auto --allow-net supabase/functions/ultron-product-studio/formats_test.ts
-      - name: Test cloud chat stream preflight
-        run: deno test supabase/functions/ultron-brain/stream-preflight_test.ts
-
   structure:
     name: Guard active project layout
     runs-on: ubuntu-latest
@@ -98,7 +84,7 @@ jobs:
       - name: Required paths exist
         run: |
           set -euo pipefail
-          required=(apps/phone packages/connectors supabase/functions supabase/migrations ultron-backend docs)
+          required=(apps/phone packages/connectors ultron-backend docs)
           for path in "${required[@]}"; do
             if [ ! -d "$path" ]; then
               echo "::error::missing required path: $path"

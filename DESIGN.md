@@ -57,9 +57,9 @@ motion:
 
 - Product: ULTRON, a personal AI agent that can chat, reason, use approved tools, manage models, connect services, and work across files and memory.
 - Primary user: one owner operating ULTRON from an Android phone and a desktop browser.
-- Canonical shared client: `apps/phone`. It is the Vite + TypeScript client used by both the production web URL and the Capacitor Android APK. Changes here must work in both surfaces.
-- Production web endpoint: `https://ultron-pied-gamma.vercel.app/` serves the canonical `apps/phone` Vite client from Vercel Git integration; the Capacitor Android APK uses the same client. Do not route the public site through Cloudflare.
-- Backend: Supabase cloud functions and Vault, with an optional Python control plane. The public client has no per-visitor account flow; keep provider secrets server-side and preserve connector/tool permissions.
+- Canonical shared client: `apps/phone`. It is the Vite + TypeScript client used by both the production web URL and the Capacitor Android APK.
+- Delivery: the Capacitor Android APK built from `apps/phone`. There is no hosted web client.
+- Backend: none. Provider keys live in the on-device encrypted vault and requests go directly to each provider; preserve plugin and tool permissions.
 
 **Design direction:** a clean, familiar conversation workspace inspired by ChatGPT. The entire interface is rebuilt around readable conversations, a bottom composer, a persistent desktop sidebar, restrained charcoal surfaces and subtle green interaction states. ULTRON branding is text-first. No orb, avatar, animated core, HUD, sci-fi decoration, glass panels, ambient effects or stacked card dashboard. Keep every existing capability, but organize secondary functions into clear pages reachable from navigation.
 
@@ -165,7 +165,7 @@ Each component must define default, hover, focus-visible, pressed, disabled, loa
 
 ## Do's and Don'ts
 
-- Do not change provider routing, chat transport, model formats, Supabase schema, Vault, connector permissions or tool execution as part of a visual-only change.
+- Do not change provider routing, chat transport, model formats, the key vault, plugin permissions or tool execution as part of a visual-only change.
 - Do not remove features to make a page look simpler. Make dense functionality understandable through hierarchy, grouping and progressive disclosure.
 - Do not invent fake charts, metrics, model availability, connection states or progress.
 - Do not add a UI framework, component library, icon library, font CDN or animation dependency without proving it is needed.

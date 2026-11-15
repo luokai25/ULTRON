@@ -42,8 +42,8 @@ assert.match(element("llm-api-keys-screen"), /\shidden(?:\s|>)/, "API key screen
 assert.ok(main.includes('req<HTMLButtonElement>("#drawer-llm-api-keys").addEventListener'), "missing API key drawer navigation handler");
 assert.ok(main.includes('apiKeySaveButton.addEventListener'), "missing API key save/test handler");
 assert.ok(main.includes('apiKeyRemoveButton.addEventListener'), "missing API key removal handler");
-assert.ok(main.includes('cloudLlmAddButton.addEventListener'), "missing Supabase API key save handler");
-assert.ok(main.includes('refreshCloudLlmScreen'), "missing Supabase cloud key/status refresh");
+assert.ok(main.includes('cloudLlmAddButton.addEventListener'), "missing API key save handler");
+assert.ok(main.includes('refreshCloudLlmScreen'), "missing key/status refresh");
 assert.ok(main.includes('nativeSecureStorage.set'), "API keys must use Android encrypted storage");
 assert.ok(main.includes('providerGenerationToken'), "API provider streaming must render token events");
 

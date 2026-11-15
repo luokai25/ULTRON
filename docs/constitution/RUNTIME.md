@@ -4,7 +4,7 @@ This module operationalizes the runtime directives in [ULTRON_SOURCE.md](ULTRON_
 
 ## Phone and cloud
 - Android owns device-only capabilities, local model loading, app-private files, and actual phone telemetry.
-- Supabase is the default home for network-facing services, durable orchestration, schedules, memory coordination, artifact metadata and cloud tools when the function is better suited to cloud execution.
+- The phone is the default home for services, orchestration, schedules, memory and tools; nothing depends on a hosted backend.
 - Use short-lived REST/GraphQL or transaction-pooler database access. Every new table and query path must be owner-scoped and protected by RLS.
 - Cloud work must be split into bounded Edge Function steps and durable jobs, not unbounded execution in a single request.
 

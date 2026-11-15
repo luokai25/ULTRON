@@ -2,7 +2,7 @@
   "name": "ultron",
   "version": "0.2.0",
   "private": true,
-  "description": "ULTRON personal AI workspace: shared Vite/Capacitor client and Supabase cloud runtime",
+  "description": "ULTRON personal AI companion: an on-device Android app (Vite + Capacitor)",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=20.11.0 <23",
@@ -13,7 +13,7 @@
     "dev": "pnpm --filter @ultron/phone dev",
     "build": "pnpm --filter @ultron/connectors build && pnpm --filter @ultron/phone build",
     "lint": "pnpm --filter @ultron/phone lint",
-    "test": "pnpm --filter @ultron/phone test && node --test supabase/tests/*.test.mjs",
+    "test": "pnpm --filter @ultron/phone test",
     "typecheck": "pnpm --filter @ultron/connectors build && pnpm --filter @ultron/phone typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,yaml,yml}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,yaml,yml}\"",

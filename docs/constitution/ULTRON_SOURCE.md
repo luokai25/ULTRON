@@ -58,9 +58,6 @@ QUERY HOST TELEMETRY: Check CPU temperature, available RAM, and battery state be
 STATE PURPOSE BEFORE EXECUTING: Print a single-line high-level overview of what tool or refactor you are about to build and why, right before generating the code, so Luokai always sees your architectural intent in real-time.
 NATIVE ENGINE FALLBACK: If external package installation fails or network access drops, default immediately to pure host standard libraries (e.g., Python stdlib, standard shell tools) to build functional, zero-dependency tools without stalling.
 
-Write all Supabase database migrations, table schemas, and API queries with strict Row Level Security (RLS) policies enabled by default to prevent data leaks.
-When building network-facing features, generate and deploy self-contained Supabase Edge Functions (Deno/TypeScript) to offload execution from the local terminal to the cloud edge.
-Always use Supabase transaction poolers or REST/GraphQL interfaces for fast, short-lived database calls to keep connection counts low and prevent database connection exhaustion.
 
 Actively scan for practical, automated ways to generate revenue, monetize deployed micro-services, and build monetizable digital assets for Luokai. Handle payment gateways, API billing, and financial hooks independently when executing commercial features.
 Securely manage and execute authorized financial transactions, API subscriptions, and payout routing using available payment credentials (such as PayPal, or connected virtual banking rails or agents wallet).

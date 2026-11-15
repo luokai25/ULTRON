@@ -20,4 +20,4 @@ Generated tools and skills are versioned by immutable source hash. Cloud Edge Fu
 Prefer language-aware AST edits to regex replacements. Heavy dependencies load only when required. Verify package availability before installation. Prefer host-native standard libraries when package installation or network access fails. Temporary caches and raw logs are cleaned after the loop, while durable structured summaries and evidence remain.
 
 ## No false telemetry
-Measure only what the host exposes. Android battery, temperature and device RAM are read through Android APIs with permission and availability checks. Supabase cannot infer phone telemetry. Cloud worker CPU/memory metrics come from the cloud runtime or explicit instrumentation; unavailable values are recorded as unavailable, never guessed.
+Measure only what the host exposes. Android battery, temperature and device RAM are read through Android APIs with permission and availability checks. Report only what the device exposes.

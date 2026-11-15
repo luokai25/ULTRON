@@ -19,7 +19,6 @@ export default defineConfig({
           if (id.includes("/node_modules/@capacitor/")) return "capacitor";
           if (id.includes("/node_modules/pdfjs-dist/")) return "pdf";
           if (id.includes("/node_modules/mammoth/")) return "documents";
-          if (id.includes("/node_modules/@supabase/")) return "supabase";
         },
       },
     },

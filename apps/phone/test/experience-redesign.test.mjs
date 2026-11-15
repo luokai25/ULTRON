@@ -288,7 +288,7 @@ test("Learning Review filter controls meet the minimum touch target", async () =
 
 test("every secondary page uses the same quiet charcoal workspace primitives", async () => {
   const [html, css] = await Promise.all([read("index.html"), read("src/chatgpt-ui.css")]);
-  for (const id of ["agent-identities-screen", "llm-api-keys-screen", "product-studio-screen", "vault-screen", "learning-screen", "capabilities-screen"]) {
+  for (const id of ["agent-identities-screen", "llm-api-keys-screen", "vault-screen", "learning-screen"]) {
     assert.match(html, new RegExp(`id="${id}" class="feature-screen`), `${id} must use the shared page shell`);
   }
   for (const selector of [

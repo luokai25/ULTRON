@@ -47,7 +47,7 @@ function taskComplexity(messages: Array<{ role: string; content: string }>): num
   const task = messages.filter((message) => message.role === "user").slice(-6).map((message) => message.content.slice(0, 24000)).join("\n").toLowerCase();
   let score = 0;
   if (/\b(build|implement|debug|refactor|architecture|research|compare|analy[sz]e|design|migrate|deploy|multi.step|step.by.step|investigate|prove|optimi[sz]e)\b/.test(task)) score += 2;
-  if (/\b(code|typescript|javascript|python|sql|android|supabase|github|compiler|stack trace|test suite)\b/.test(task)) score += 2;
+  if (/\b(code|typescript|javascript|python|sql|android|github|compiler|stack trace|test suite)\b/.test(task)) score += 2;
   if (/\b(reasoning|mathematical proof|derive|formal|algorithm|security review|large codebase)\b/.test(task)) score += 2;
   if (task.length > 5000) score += 1;
   if (messages.length > 5) score += 1;

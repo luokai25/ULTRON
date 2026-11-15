@@ -99,8 +99,8 @@
           <div class="llm-key-header-actions"><button id="llm-api-keys-back" class="icon-btn" type="button" aria-label="Back to chat">‹</button></div>
         </header>
         <section class="llm-key-card llm-cloud-card">
-          <div class="llm-key-heading"><strong>Ultron Supabase · Cloud brain</strong><span id="cloud-brain-state">Checking cloud…</span></div>
-          <p id="cloud-brain-status" class="llm-api-key-status" data-state="missing" role="status" aria-live="polite">Public ULTRON cloud runtime. No account or sign-in is required.</p>
+          <div class="llm-key-heading"><strong>Provider keys · direct from this device</strong><span id="cloud-brain-state">Checking keys…</span></div>
+          <p id="cloud-brain-status" class="llm-api-key-status" data-state="missing" role="status" aria-live="polite">Keys are verified and used directly from this device. No account or sign-in is required.</p>
           <div class="ultron-universal-key-entry">
             <label class="llm-key-field"><span>Paste API key</span><input id="cloud-llm-key" type="password" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste any supported API key…" /></label>
             <p id="cloud-llm-detected" class="ultron-key-detected" aria-live="polite">Provider is detected automatically. If the key format is ambiguous, choose its provider below.</p>
@@ -108,7 +108,7 @@
           </div>
           <div class="ultron-key-file-import">
             <div class="ultron-key-file-heading"><strong>Import provider key files</strong><span>Batch import · up to 100 keys</span></div>
-            <p class="ultron-key-file-help" id="cloud-llm-file-help">Choose provider-specific .txt files. ULTRON parses them on this device; only individual key values are sent over HTTPS to your connected Supabase project for verification and encrypted Vault storage. The original files stay on this device, and key values are never displayed.</p>
+            <p class="ultron-key-file-help" id="cloud-llm-file-help">Choose provider-specific .txt files. ULTRON parses them on this device; only each key value is sent over HTTPS to its own provider to verify it, then it is stored encrypted on this device.</p>
             <label class="llm-key-field" for="cloud-llm-files">
               <span>Provider .txt files</span>
               <input id="cloud-llm-files" type="file" accept=".txt,text/plain" multiple aria-describedby="cloud-llm-file-help cloud-llm-import-status" />
@@ -132,7 +132,7 @@
           <p id="cloud-free-capacity" class="llm-key-note" role="status" aria-live="polite">Add a key to see your estimated free capacity.</p>
           <div class="cloud-provider-directory"><div><strong>Free provider directory</strong><small id="cloud-free-provider-count">Checking public provider list…</small></div><button id="cloud-free-providers-refresh" class="text-action" type="button" hidden>Refresh list</button></div>
           <a hidden class="model-source-link" href="https://github.com/raullenchai/free-llm-api-resources" target="_blank" rel="noopener noreferrer">Read free LLM API resources ↗</a>
-          <small class="llm-key-note">Keys are encrypted on this device and never saved in Supabase. The Vercel Brain gateway verifies provider keys and streams model responses without persisting your credentials. Keep a secure backup of your keys because they do not automatically sync between devices.</small>
+          <small class="llm-key-note">Keys are encrypted on this device. Requests go directly from your phone to the provider you choose; there is no ULTRON server. Keep a secure backup of your keys because they do not automatically sync between devices.</small>
         </section>
         <section class="llm-key-card">
           <div class="llm-key-heading"><strong>Device-only provider key</strong><span id="llm-api-key-provider">No provider detected</span></div>
@@ -147,61 +147,6 @@
           <p id="llm-api-key-status" class="llm-api-key-status" data-state="missing" role="status" aria-live="polite">No API key saved</p>
           <div id="llm-api-key-models" class="llm-api-models"></div>
           <small class="llm-key-note">ULTRON detects supported key formats automatically. Android stores the key encrypted with the device Keystore. Only compatible chat-completion APIs are enabled; unsupported key types are identified instead of being silently accepted.</small>
-        </section>
-      </section>
-      <section id="product-studio-screen" class="feature-screen product-studio-screen" aria-label="AI Digital Products Generating" hidden>
-        <header class="feature-head">
-          <div><span class="feature-eyebrow">ULTRON · PRODUCT STUDIO</span><h1>AI Digital Products Generating</h1><p>Find an opportunity, research the evidence, then create an original product.</p></div>
-          <div class="product-studio-head-actions"><button id="product-studio-back" class="icon-btn" type="button" aria-label="Back to chat">‹</button><button id="product-studio-refresh" class="icon-btn" type="button" aria-label="Refresh projects">↻</button></div>
-        </header>
-        <div id="product-studio-notice" class="product-studio-notice" role="status" aria-live="polite">ULTRON cloud runtime ready. Start a new product project.</div>
-        <section id="product-studio-start">
-          <div class="product-studio-intro">
-            <span class="section-eyebrow">FROM PROBLEM TO PRODUCT</span>
-            <h2>Turn a real problem into something people can use.</h2>
-            <p>ULTRON investigates public evidence, identifies a useful gap and creates a private, source-backed digital product. Research coverage is reported honestly. Cloud work continues if you close the app. Nothing is published or sold automatically.</p>
-          </div>
-          <form id="product-studio-form" class="product-studio-form">
-            <label for="product-studio-request">What problem, audience or topic should I investigate?
-              <textarea id="product-studio-request" maxlength="4000" placeholder="Example: Help independent tutors reduce the time they spend preparing lessons and tracking student progress…"></textarea>
-            </label>
-            <label for="product-studio-depth">Research depth
-              <select id="product-studio-depth">
-                <option value="50">50 sources · focused</option>
-                <option value="100">100 sources · broad</option>
-                <option value="200" selected>200 sources · extensive</option>
-                <option value="500">500 sources · deep research</option>
-              </select>
-            </label>
-            <div class="product-studio-actions">
-              <button id="product-studio-submit" class="product-studio-primary" type="submit">Start creating</button>
-              <button id="product-studio-discover" type="button">Find an opportunity for me</button>
-            </div>
-          </form>
-          <section class="product-studio-project-section">
-            <div class="product-studio-section-head"><h3>Your projects</h3><button id="product-studio-refresh-list" type="button">Refresh list</button></div>
-            <div id="product-studio-projects" class="product-studio-projects"><p class="product-studio-empty">Your projects will appear here.</p></div>
-          </section>
-        </section>
-        <section id="product-studio-workspace" class="product-studio-workspace" hidden>
-          <div class="product-studio-toolbar">
-            <div><span class="feature-eyebrow">LIVE PROJECT</span><h2 id="product-studio-title">Product project</h2><span id="product-studio-status" class="product-studio-status">Queued</span></div>
-            <div class="product-studio-actions"><button id="product-studio-new" type="button">New project</button><button id="product-studio-pause" type="button" hidden>Pause run</button><button id="product-studio-cancel" type="button" hidden>Cancel run</button><button id="product-studio-resume" type="button" hidden>Continue research</button><a id="product-studio-download" class="product-studio-download" hidden download>Download draft</a></div>
-          </div>
-          <progress id="product-studio-progress" class="product-studio-progress" max="100" value="0" aria-label="Project progress"></progress>
-          <div class="product-studio-stage">Current stage: <strong id="product-studio-stage">Queued</strong><span id="product-studio-coverage"></span></div>
-          <p id="product-studio-warning" class="product-studio-warning" hidden></p>
-          <div class="product-studio-grid">
-            <div class="product-studio-left">
-              <section class="product-studio-pane"><h3>Opportunity &amp; synthesis</h3><div id="product-studio-opportunity" class="product-studio-opportunity"><p class="product-studio-empty">The opportunity brief will appear after identification.</p></div></section>
-              <section class="product-studio-pane"><h3>Research coverage</h3><div id="product-source-counts" class="product-source-counts"></div></section>
-              <section class="product-studio-pane"><h3>Quality checks</h3><div id="product-studio-quality" class="product-studio-quality"><p class="product-studio-empty">Checks run after the first complete draft.</p></div></section>
-              <section class="product-studio-pane"><h3>Activity</h3><div id="product-studio-events" class="product-studio-events"><p class="product-studio-empty">Waiting for work to start.</p></div></section>
-              <section class="product-studio-pane"><h3>Research sources</h3><div id="product-studio-sources" class="product-studio-sources"><p class="product-studio-empty">Sources will appear here.</p></div></section>
-              <section class="product-studio-pane"><h3>Product files</h3><div id="product-studio-documents" class="product-studio-documents"><p class="product-studio-empty">Your export files will appear here.</p></div></section>
-            </div>
-            <section class="product-studio-pane product-studio-right"><h3>Live product preview</h3><div id="product-studio-preview-empty" class="product-studio-preview-empty">The preview appears when ULTRON saves the first draft.</div><iframe id="product-studio-preview" class="product-studio-preview" title="Digital product preview" sandbox="" hidden></iframe></section>
-          </div>
         </section>
       </section>
       <section id="vault-screen" class="feature-screen mindmap-screen" aria-label="Combined knowledge mind map" hidden>
@@ -222,20 +167,6 @@
         <p class="feature-disclaimer">A proposal is not a code change. “Record external implementation” only records that you changed something elsewhere. Verification requires test or runtime evidence that you provide.</p>
       </section>
 
-      <section id="capabilities-screen" class="feature-screen capability-screen" aria-label="ULTRON capability control panel" hidden>
-        <header class="feature-head"><div><span class="feature-eyebrow">SELF-IMPROVEMENT · TOOL CONTROL PLANE</span><h1>Capabilities</h1><p>Tools ULTRON builds, changes he proposes, and the actual history of what ran.</p></div><button id="capabilities-back" class="icon-btn" type="button" aria-label="Back to chat">‹</button></header>
-        <div class="capability-hero"><div class="capability-hero-mark">✳</div><div><strong>ULTRON capability engine</strong><p id="capability-connection">Checking owner session and Supabase connection…</p></div><button id="capability-refresh" class="ghost" type="button">Refresh</button></div>
-        <div id="capability-stats" class="capability-stats" aria-live="polite"><div class="capability-stat"><small>TOOLS</small><strong>—</strong></div><div class="capability-stat"><small>PROPOSALS</small><strong>—</strong></div><div class="capability-stat"><small>AGENT RUNS</small><strong>—</strong></div><div class="capability-stat"><small>EVENTS</small><strong>—</strong></div></div>
-        <div id="capability-feedback" class="capability-feedback" role="status" aria-live="polite">Connecting to the private ULTRON control plane…</div>
-        <section class="capability-section"><div class="capability-section-head"><div><span class="section-eyebrow">GENERATED TOOL REGISTRY</span><h2>Tools &amp; versions</h2></div><span id="capability-tool-count" class="capability-count">0</span></div><div id="capability-tools" class="capability-list"><div class="skeleton-card" aria-label="Loading tools"></div><div class="skeleton-card" aria-hidden="true"></div></div></section>
-        <section class="capability-section"><div class="capability-section-head"><div><span class="section-eyebrow">SUPABASE-NATIVE WORKFLOWS</span><h2>ULTRON-authored tools</h2></div><span id="capability-cloud-tool-count" class="capability-count">0</span></div><div id="capability-cloud-tools" class="capability-list"><div class="skeleton-card" aria-label="Loading Supabase tools"></div><div class="skeleton-card" aria-hidden="true"></div></div></section>
-        <section class="capability-section"><div class="capability-section-head"><div><span class="section-eyebrow">EXECUTION TELEMETRY</span><h2>Cloud tool runs</h2></div><span id="capability-tool-run-count" class="capability-count">0</span></div><div id="capability-tool-runs" class="capability-list"><div class="skeleton-card" aria-label="Loading cloud tool runs"></div></div></section>
-        <section class="capability-section"><div class="capability-section-head"><div><span class="section-eyebrow">SHARED MODEL SKILLS</span><h2>Cloud skills</h2></div><span id="capability-cloud-skill-count" class="capability-count">0</span></div><div id="capability-cloud-skills" class="capability-list"><div class="skeleton-card" aria-label="Loading cloud skills"></div></div></section>
-        <section class="capability-section"><div class="capability-section-head"><div><span class="section-eyebrow">CHANGE CONTROL</span><h2>Proposals</h2></div><span id="capability-proposal-count" class="capability-count">0</span></div><div id="capability-proposals" class="capability-list"><div class="skeleton-card" aria-label="Loading proposals"></div></div></section>
-        <section class="capability-section"><div class="capability-section-head"><div><span class="section-eyebrow">EXECUTION TELEMETRY</span><h2>Agent runs</h2></div><span id="capability-run-count" class="capability-count">0</span></div><div id="capability-runs" class="capability-list"><div class="skeleton-card" aria-label="Loading agent runs"></div></div></section>
-        <section class="capability-section"><div class="capability-section-head"><div><span class="section-eyebrow">APPEND-ONLY RECORD</span><h2>Event history</h2></div><span id="capability-event-count" class="capability-count">0</span></div><div id="capability-events" class="capability-list"><div class="skeleton-card" aria-label="Loading event history"></div></div></section>
-        <div class="capability-boundary"><strong>Execution status</strong><p>Cloud-backed tools and skills run through ULTRON’s private Supabase runtime. Phone-only capabilities remain on the device. This panel shows real versions, proposals, execution records and failures.</p></div>
-      </section>
 <nav class="bottom-nav" aria-label="Main navigation">
         <button id="nav-chat" class="nav-item" type="button" aria-current="page">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 2v-6.5A7.5 7.5 0 1 1 20 11.5Z"/><path d="M8 11h8M8 14h5"/></svg><span>Chats</span>
@@ -275,9 +206,7 @@
         <button id="drawer-identities" class="drawer-link" type="button"><span aria-hidden="true">✳</span>Agents &amp; Identities</button>
         <button id="drawer-mindmap" class="drawer-link" type="button"><span aria-hidden="true">◎</span>Mind Map</button>
         <button id="drawer-learning" class="drawer-link" type="button"><span aria-hidden="true">⌁</span>Learning Review</button>
-        <button id="drawer-capabilities" class="drawer-link" type="button"><span aria-hidden="true">✳</span>ULTRON Capabilities</button>
         <button id="drawer-llm-api-keys" class="drawer-link" type="button"><span aria-hidden="true">⌘</span>LLM API KEYS</button>
-        <button id="drawer-product-studio" class="drawer-link" type="button"><span aria-hidden="true">✧</span>AI Digital Products Generating</button>
         <button id="connectors-btn" class="drawer-link">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 01-10 0V8zM12 17v4"/></svg>
           Tools &amp; Connectors
@@ -352,17 +281,9 @@
           <label class="field"><span class="toggle-label"><input id="voice-updates-toggle" type="checkbox" /> Spoken telemetry</span><small>Speak important proactive status updates only. ULTRON will not automatically read ordinary chat replies aloud. Microphone listening remains manual and user-started.</small></label>
           <p id="presence-settings-status" class="native-model-status" role="status">Voice backend: device speech fallback. ULTRON's dedicated local neural voice model is not installed yet.</p>
         </section>
-        <section class="field" aria-labelledby="cloud-sync-heading" hidden>
-          <span id="cloud-sync-heading">ULTRON private cloud sync</span>
-          <small>Connect the owner account you already created. Your on-device brain and local conversations continue to work without internet; this account enables encrypted-in-transit backup and synchronization through your private ULTRON database.</small>
-          <label class="field"><span>Email address</span><input id="cloud-email" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Owner email" /></label>
-          <label class="field"><span>Password</span><input id="cloud-password" type="password" autocomplete="current-password" placeholder="ULTRON account password" /></label>
-          <div class="sheet-actions">
-            <button id="cloud-connect" class="solid" type="button">Connect &amp; sync</button>
-            <button id="cloud-disconnect" class="ghost" type="button" disabled>Disconnect</button>
-          </div>
-          <p id="cloud-sync-status" class="native-model-status" role="status">Not connected. Local-only mode is active.</p>
-          <small>Authentication uses Supabase. On Android, the refreshable session is encrypted with AES-GCM and a key held by the Android Keystore; web preview uses browser storage.</small>
+        <section class="field" aria-labelledby="cloud-sync-heading">
+          <span id="cloud-sync-heading">Storage</span>
+          <p id="cloud-sync-status" class="native-model-status" role="status">Everything is stored on this device.</p>
         </section>
         <label class="field">
           <span>Optional Ultron backend</span>

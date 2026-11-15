@@ -32,11 +32,10 @@ test("ULTRON design workflow and complete screen inventory remain installed", as
 });
 
 test("canonical phone client uses one clean stylesheet and keeps the existing backend client", async () => {
-  const [html, css, main, cloudSync] = await Promise.all([
+  const [html, css, main] = await Promise.all([
     read("apps/phone/index.html"),
     read("apps/phone/src/chatgpt-ui.css"),
     read("apps/phone/src/main.ts"),
-    read("apps/phone/src/cloud-sync.ts"),
   ]);
   const stylesheetLinks = [...html.matchAll(/<link rel="stylesheet" href="([^"]+)"/g)].map((match) => match[1]);
   assert.deepEqual(stylesheetLinks, ["./src/chatgpt-ui.css"]);
@@ -50,15 +49,13 @@ test("canonical phone client uses one clean stylesheet and keeps the existing ba
   assert.match(css, /\.composer\s*\{/);
   assert.match(css, /#prompt\s*\{/);
   assert.match(css, /#drawer\s*\{/);
-  for (const selector of [".identity-cards", ".llm-key-card", ".product-studio-form", ".learning-stats", ".capability-stats", ".conn-list", ".workspace-stats", ".mindmap-toolbar"]) {
+  for (const selector of [".identity-cards", ".llm-key-card", ".learning-stats", ".conn-list", ".workspace-stats", ".mindmap-toolbar"]) {
     assert.ok(css.includes(selector), `missing shared secondary-page treatment: ${selector}`);
   }
-  assert.match(css, /\.identity-visual-section, \.capability-hero-mark, \.github-mark/);
   assert.match(css, /\.feature-screen > :not\(\.feature-head\)/);
   assert.match(css, /prefers-reduced-motion:\s*reduce/);
   assert.doesNotMatch(html, /src\/(?:styles|workspace|experience|finish|learning|design-system|quiet-ui|motion-experience|product-studio)\.css/);
   assert.match(main, /streamUltronBrainChat/);
-  assert.match(main, /getCloudSession/);
   assert.match(main, /addUltronCloudKey/);
   assert.doesNotMatch(main, /initializeAvatar|import\(["']three["']\)|markSvg|markDataUrl/);
   assert.match(main, /nativeSecureStorage/);
@@ -78,8 +75,8 @@ test("responsive requirements and every full-screen destination remain covered",
     assert.ok(design.includes(viewport), `missing viewport contract: ${viewport}`);
   }
   const fullScreens = [...html.matchAll(/<section id="([^"]+)" class="feature-screen[^"]*"/g)].map((match) => match[1]);
-  assert.ok(fullScreens.length >= 5, "the inventory should cover all full-screen destinations");
-  for (const id of [...fullScreens, "thread", "hero", "global-search", "chat-model-menu", "connectors-panel", "connector-detail-wrap", "workspace-panel", "workspace-team-builder", "workspace-tray", "composio-approvals", "sheet-wrap"]) {
+  assert.ok(fullScreens.length >= 3, "the inventory should cover all full-screen destinations");
+  for (const id of [...fullScreens, "thread", "hero", "global-search", "chat-model-menu", "connectors-panel", "connector-detail-wrap", "workspace-panel", "workspace-team-builder", "workspace-tray", "sheet-wrap"]) {
     assert.ok(design.includes(`#${id}`), `missing design inventory entry: #${id}`);
   }
   for (const id of fullScreens) {

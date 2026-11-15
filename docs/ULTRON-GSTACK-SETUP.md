@@ -42,7 +42,7 @@ See the upstream [README](https://github.com/garrytan/gstack), [host notes](http
 - ULTRON's `AGENTS.md`, `DESIGN.md`, security constraints and screen-coverage ledger take precedence over generic upstream workflow defaults.
 - Work only on the existing `main` branch. Do not create feature branches, open pull requests or force-push.
 - Do not let a generic ship workflow publish a production deployment or release without the owner's explicit direction.
-- Do not weaken Supabase RLS, approvals, connector scopes, credential handling or Android permission boundaries.
+- Do not weaken approvals, connector scopes, credential handling or Android permission boundaries.
 - Treat upstream setup status, skill registration and actual skill usage as separate facts. Verify each independently.
 - Never claim the upstream runtime is installed unless the local `./setup --status` output confirms it.
 

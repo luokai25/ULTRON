@@ -1,7 +1,7 @@
 /**
  * ULTRON's durable local database.
  *
- * This adapter is intentionally independent of Supabase. It provides
+ * This adapter is the app's only database. It provides
  * transactional IndexedDB primitives for conversations, messages, attachments,
  * task checkpoints and metadata. Callers must await writes before reporting
  * that data has been saved.
@@ -16,7 +16,9 @@ export type DurableBucket =
   | "checkpoints"
   | "settings"
   | "memory"
-  | "metadata";
+  | "metadata"
+  | "artifacts"
+  | "artifact-blobs";
 
 export type DurableRecord<T = unknown> = {
   id: string;

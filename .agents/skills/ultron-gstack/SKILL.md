@@ -18,7 +18,7 @@ Default to preserving scope and working functionality. Expand scope only when a 
 - Work only on the existing `main` branch. Never create, switch to, or push another branch.
 - Never expose, echo, commit, log or copy API keys, tokens, signing keys, private environment values or service credentials.
 - Keep ULTRON separate from Luo Chat.
-- Preserve Supabase RLS, auth, provider routing, streaming, connector scopes, approvals, encrypted storage and tool permission boundaries.
+- Preserve provider routing, streaming, connector scopes, approvals, encrypted storage and tool permission boundaries.
 - Do not introduce paid services or new dependencies unless the owner explicitly approves and the need is demonstrated.
 - Do not change backend contracts or database schemas during a visual-only task.
 - Do not claim a test, browser run, APK build, deployment or visual inspection happened unless it actually happened.
@@ -29,7 +29,7 @@ Default to preserving scope and working functionality. Expand scope only when a 
 Treat these surfaces correctly:
 
 1. **Canonical client: `apps/phone`.** This is the only Vite application used as the production web client and embedded in the Capacitor Android APK. Every client change must work in both contexts.
-2. **Backend and data:** Supabase is the cloud runtime. `ultron-backend` is the optional Python control plane for agent sessions and connector operations. Do not recreate duplicate clients or unused service layers.
+2. **Backend and data:** there is no hosted backend. State lives on the device. `ultron-backend` is an optional Python service for desktop agent sessions.
 4. **Design source of truth:** root `DESIGN.md`. Update it when tokens, page inventory, design decisions or interaction contracts change.
 
 ## The gstack sequence
@@ -106,7 +106,7 @@ Use the intent behind `/review`, `/investigate`, `/deslop-shared-libs` and `/tes
 
 - Trace each changed interaction from UI event to state, API/service, persistence and error handling.
 - Look for regressions that pass typecheck: stale listeners, duplicate event handlers, race conditions, hidden controls, stale state, unbounded work, incorrect error states and unsafe fallback behavior.
-- Inspect security boundaries whenever credentials, Supabase, OAuth, local files, model imports or write-capable tools are touched.
+- Inspect security boundaries whenever credentials, OAuth, local files, model imports or write-capable tools are touched.
 - Remove redundant styles and abstractions only when safe and supported by tests.
 - Add regression tests for every discovered bug.
 - Never weaken assertions, skip tests, broaden permissions or silence failures to get a green build.
@@ -151,7 +151,7 @@ Use the intent behind gstack's `/ship`.
 - Run the relevant tests again after the final edit.
 - Commit to `main` only, with a descriptive message. Never create a feature branch or force-push.
 - Preserve concurrent commits and inspect the current main head before updating it.
-- Do not claim a Vercel deployment or APK artifact exists until CI/deployment output confirms it.
+- Do not claim an APK artifact exists until CI output confirms it.
 - Summarize commit, files, screens, tests, build artifacts and anything not verified.
 
 ### 8. REFLECT — improve the factory
