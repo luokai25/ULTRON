@@ -21,6 +21,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { initPlugins } from "./plugins-ui";
 import { seedBundledKeys } from "./bundled-keys";
 import { estimateFreeCapacity, formatTokens } from "./free-tier-limits";
+import { DIRECT_PROVIDERS } from "./provider-adapters";
 import type { EligibilityProvider } from "./model-eligibility";
 import { budgetConversation, buildCapabilityPrompt as buildBaseCapabilityPrompt, buildReviewPrompt, profileTask, shouldVerifyDraft } from "./capability-kernel";
 import { buildUltronSystemPrompt, prepareUltronSpeech, ULTRON_MOTTO, ULTRON_VOICE } from "./ultron-persona";
@@ -218,6 +219,23 @@ const apiKeySaveButton = req<HTMLButtonElement>("#llm-api-key-save");
 const apiKeyRemoveButton = req<HTMLButtonElement>("#llm-api-key-remove");
 const apiKeyModels = req<HTMLElement>("#llm-api-key-models");
 const cloudLlmProvider = req<HTMLSelectElement>("#cloud-llm-provider");
+/** Providers come from the registry: recommended ones first, then third-party community gateways. */
+function populateProviderSelect(select: HTMLSelectElement): void {
+  const entries = Object.entries(DIRECT_PROVIDERS).sort((a, b) => a[1].label.localeCompare(b[1].label));
+  const group = (label: string, items: Array<[string, { label: string }]>): HTMLOptGroupElement => {
+    const el = document.createElement("optgroup");
+    el.label = label;
+    for (const [id, config] of items) { const option = document.createElement("option"); option.value = id; option.textContent = config.label; el.append(option); }
+    return el;
+  };
+  select.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = ""; placeholder.textContent = "Select provider…"; placeholder.disabled = true; placeholder.selected = true;
+  select.append(placeholder,
+    group("Recommended", entries.filter(([, config]) => config.tier !== "community")),
+    group("Community gateways (third parties receive your prompts)", entries.filter(([, config]) => config.tier === "community")));
+}
+populateProviderSelect(cloudLlmProvider);
 const cloudLlmProviderFallback = req<HTMLElement>("#cloud-llm-provider-fallback");
 const cloudLlmProviderNote = req<HTMLElement>("#cloud-llm-provider-note");
 const cloudLlmProviderConsoleLink = req<HTMLAnchorElement>("#cloud-llm-provider-console");
@@ -3230,7 +3248,7 @@ function renderFreeCapacity(groups: CloudProviderGroup[]): void {
     return;
   }
   const label = (id: string): string => groups.find((group) => group.id === id)?.label ?? id;
-  const parts = capacity.lines.map((line) => `${label(line.provider)} ${formatTokens(line.monthlyTokens)}`).join(" · ");
+  const parts = capacity.lines.map((line) => `${label(line.provider)} ${line.monthlyTokens > 0 ? formatTokens(line.monthlyTokens) : "unknown limits"}`).join(" · ");
   element.textContent = `Estimated free capacity: about ${formatTokens(capacity.totalMonthlyTokens)} tokens a month across ${capacity.lines.length} provider${capacity.lines.length === 1 ? "" : "s"} (${parts}). Counted once per provider because free tiers are per account, and they can change without notice. Automatic rotates your keys and rests a key before its limit.`;
 }
 
@@ -3244,6 +3262,7 @@ function renderCloudKeyGroups(groups: CloudProviderGroup[]): void {
     return;
   }
   for (const group of groups) {
+    if (!group.keys.length) continue;
     const section = document.createElement("section");
     section.className = "cloud-provider-group";
     const heading = document.createElement("div");
@@ -4332,7 +4351,9 @@ cloudLlmProvider.addEventListener("change", () => {
     huggingface: { url: "https://huggingface.co/settings/tokens/new?tokenType=fineGrained", label: "Create a Hugging Face token ↗" },
     nvidia: { url: "https://build.nvidia.com/settings/api-keys", label: "Open NVIDIA API keys ↗" },
   };
-  const selected = links[cloudLlmProvider.value] ?? { url: "https://openrouter.ai/settings/keys", label: "Open OpenRouter API keys ↗" };
+  const config = DIRECT_PROVIDERS[cloudLlmProvider.value];
+  const home = config ? new URL(config.chatUrl).origin : "https://openrouter.ai";
+  const selected = links[cloudLlmProvider.value] ?? { url: home, label: `Open ${new URL(home).host} ↗` };
   cloudLlmProviderConsoleLink.href = selected.url;
   cloudLlmProviderConsoleLink.textContent = selected.label;
   cloudLlmProviderNote.textContent = cloudLlmProvider.value === "mistral"
@@ -4350,8 +4371,10 @@ cloudLlmProvider.addEventListener("change", () => {
             : cloudLlmProvider.value === "nvidia"
               ? "NVIDIA's hosted catalog is free with developer credits and a per-minute rate limit. Keys start with nvapi-."
         : cloudLlmProvider.value === "google_ai_studio"
-          ? "Gemini API keys from Google AI Studio use Google’s OpenAI-compatible endpoint. ULTRON routes only model IDs identified as free-tier eligible; quotas depend on your Google project."
-          : "Automatic routing uses the provider's eligible free-tier models where available. Rate limits trigger key rotation and cooldown.";
+          ? "Gemini API keys from Google AI Studio (including the new AQ. keys) use Google’s native Gemini endpoint. ULTRON routes only model IDs identified as free-tier eligible; quotas depend on your Google project."
+          : config?.tier === "community"
+            ? "Community gateway: a third party runs this service and receives your prompts. Add only a key you obtained from them. Free limits are not published, so ULTRON relies on the provider's own responses and rotates away on errors."
+            : "Automatic routing uses the provider's eligible free-tier models where available. Rate limits trigger key rotation and cooldown.";
 });
 cloudFreeProvidersRefreshButton.addEventListener("click", () => void refreshFreeProviderDirectory(true));
 void loadSavedProviderKey();

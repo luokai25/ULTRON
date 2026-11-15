@@ -1,8 +1,9 @@
 import { RuntimeCache } from "./runtime-cache";
-import { ProviderHttpError, streamProviderChat, verifyProviderKey } from "./provider-adapters";
+import { DIRECT_PROVIDERS, ProviderHttpError, streamProviderChat, verifyProviderKey } from "./provider-adapters";
 import { defaultProviderTransport } from "./provider-transport";
-import { automaticModels, freeModel } from "./model-eligibility";
-import { FREE_TIER_LIMITS } from "./free-tier-limits";
+import { automaticModels, catalogModel, freeModel } from "./model-eligibility";
+import { limitsFor } from "./free-tier-limits";
+import { FREE_CATALOG_SOURCE } from "./free-catalog.generated";
 import { usageLedger } from "./usage-ledger";
 import {
   getLocalProviderKeyCandidates,
@@ -26,18 +27,7 @@ export type CloudModel = { id: string; model_id: string; provider: CloudProvider
 export type CloudBrainStatus = { state: string; connected_keys?: number; enabled_keys?: number; last_worker_at?: string; registry_providers?: number; registry_synced_at?: string };
 export type CloudProviderRegistry = { source: string; synced_at: string; providers: Array<{ name: string; url: string }> };
 
-const PROVIDERS: Record<CloudProviderId, string> = {
-  openrouter: "OpenRouter",
-  mistral: "Mistral",
-  cerebras: "Cerebras",
-  groq: "Groq",
-  cohere: "Cohere",
-  google_ai_studio: "Google AI Studio",
-  huggingface: "Hugging Face",
-  nvidia: "NVIDIA NIM",
-  zhipu: "Z.ai (GLM)",
-  ollama_cloud: "Ollama Cloud",
-};
+const PROVIDERS: Record<CloudProviderId, string> = Object.fromEntries(Object.entries(DIRECT_PROVIDERS).map(([id, config]) => [id, config.label]));
 const SUPPORTED_PROVIDERS = new Set<CloudProviderId>(Object.keys(PROVIDERS) as CloudProviderId[]);
 const cloudModelCache = new RuntimeCache<CloudModel[]>(16, 500_000);
 const CLOUD_MODEL_CACHE_TTL_MS = 15_000;
@@ -98,7 +88,7 @@ export async function listUltronCloudKeys(): Promise<{ providers: CloudProviderG
       request_count: row.request_count, tokens_used: row.tokens_used, cooldown_until: row.cooldown_until, last_used_at: row.last_used_at,
       last_checked_at: row.last_checked_at, last_error: row.last_error, created_at: row.created_at,
     }));
-    return { id: provider, label: PROVIDERS[provider], key_count: keys.length, connected_count: keys.filter((key) => key.enabled && (key.status === "connected" || key.status === "rate_limited") && (!key.cooldown_until || Date.parse(key.cooldown_until) <= now)).length, keys };
+    return { id: provider, label: PROVIDERS[provider] ?? provider, key_count: keys.length, connected_count: keys.filter((key) => key.enabled && (key.status === "connected" || key.status === "rate_limited") && (!key.cooldown_until || Date.parse(key.cooldown_until) <= now)).length, keys };
   });
   const all = providers.flatMap((provider) => provider.keys);
   return { providers, total_keys: all.length, connected_keys: all.filter((key) => key.enabled && (key.status === "connected" || key.status === "rate_limited") && (!key.cooldown_until || Date.parse(key.cooldown_until) <= now)).length };
@@ -150,24 +140,12 @@ export async function getUltronCloudStatus(): Promise<{ status: CloudBrainStatus
   return { status: { state: keys.connected_keys ? "ready" : "no_keys", connected_keys: keys.connected_keys, enabled_keys: keys.connected_keys }, total_keys: keys.total_keys, connected_keys: keys.connected_keys };
 }
 
-/** Built-in directory of the free-tier providers ULTRON can call directly. It is compiled into the app, not fetched. */
+/** Built-in directory of every provider ULTRON can call directly. It is compiled into the app, not fetched. */
 export async function getUltronFreeProviders(_refresh = false): Promise<CloudProviderRegistry | null> {
-  return {
-    source: "Built in; researched from the cheahjs/free-llm-api-resources and tashfeenahmed/freellmapi (MIT) catalogues and each provider's documentation",
-    synced_at: "2026-11-13T00:00:00Z",
-    providers: [
-      { name: "OpenRouter (:free models)", url: "https://openrouter.ai/settings/keys" },
-      { name: "Google AI Studio (Gemini free tier)", url: "https://aistudio.google.com/apikey" },
-      { name: "Groq", url: "https://console.groq.com/keys" },
-      { name: "Hugging Face Inference Providers", url: "https://huggingface.co/settings/tokens/new?tokenType=fineGrained" },
-      { name: "NVIDIA NIM", url: "https://build.nvidia.com/settings/api-keys" },
-      { name: "Z.ai (GLM flash models)", url: "https://z.ai/manage-apikey/apikey-list" },
-      { name: "Ollama Cloud", url: "https://ollama.com/settings/keys" },
-      { name: "Mistral (free plan)", url: "https://console.mistral.ai/api-keys/" },
-      { name: "Cohere (trial key)", url: "https://dashboard.cohere.com/api-keys" },
-      { name: "Cerebras (stored; not auto-routed)", url: "https://cloud.cerebras.ai" },
-    ],
-  };
+  const providers = Object.entries(DIRECT_PROVIDERS)
+    .sort((a, b) => Number(a[1].tier === "community") - Number(b[1].tier === "community") || a[1].label.localeCompare(b[1].label))
+    .map(([, config]) => ({ name: config.tier === "community" ? `${config.label} (community)` : config.label, url: new URL(config.chatUrl).origin }));
+  return { source: `Built in; chat endpoints and free-tier limits imported from ${FREE_CATALOG_SOURCE} (MIT) and each provider's documentation`, synced_at: "2026-11-15T00:00:00Z", providers };
 }
 
 const MAX_CLOUD_MESSAGE_CHARS = 22_000;
@@ -233,9 +211,14 @@ export async function streamUltronBrainChat(
       const models = selectedModel ? [selectedModel] : automaticModels(candidateProvider, key.models, key.blocked_models)
         .sort((x, y) => modelCapabilityScore(y, complexity) - modelCapabilityScore(x, complexity)).slice(0, 3);
       keyCounts.models += models.length;
-      if (!selectedModel && !models.length) ineligible.add(PROVIDERS[candidateProvider]);
-      const used = usageLedger.utilization(key.id, FREE_TIER_LIMITS[candidateProvider]);
-      return models.map((model) => ({ provider: candidateProvider, key, model, used, score: modelCapabilityScore(model, complexity) + (freeModel(candidateProvider, model) ? 5000 : 0) }));
+      if (!selectedModel && !models.length) ineligible.add(PROVIDERS[candidateProvider] ?? candidateProvider);
+      return models.map((model) => {
+        const used = usageLedger.utilization(`${key.id}|${model}`, limitsFor(candidateProvider, model));
+        const listed = catalogModel(candidateProvider, model);
+        // A catalogue rank is a published ordering of free models; it outweighs name heuristics when present.
+        const score = (listed ? 600 + listed.rank * 45 : modelCapabilityScore(model, complexity)) + (freeModel(candidateProvider, model) ? 5000 : 0);
+        return { provider: candidateProvider, key, model, used, score };
+      });
     });
   }));
   // Spread load: a key close to its estimated free-tier cap loses rank to fresher keys, and a key past its estimated
@@ -272,7 +255,7 @@ export async function streamUltronBrainChat(
       if (skippedKeys.has(candidate.key.id)) continue;
       let emitted = false;
       let content = "";
-      usageLedger.noteRequest(candidate.key.id);
+      usageLedger.noteRequest(`${candidate.key.id}|${candidate.model}`);
       try {
         content = await streamProviderChat(
           candidate.provider, candidate.key.apiKey,
@@ -284,7 +267,7 @@ export async function streamUltronBrainChat(
         if (controller.signal.aborted) break;
         if (error instanceof ProviderHttpError) {
           const message = error.message;
-          lastError = new Error(`${PROVIDERS[candidate.provider]} HTTP ${error.status}: ${message.slice(0, 400)}`);
+          lastError = new Error(`${PROVIDERS[candidate.provider] ?? candidate.provider} HTTP ${error.status}: ${message.slice(0, 400)}`);
           const status = error.status;
           const outcome = status === 401 ? "invalid"
             : status === 403 ? (/model|only available/i.test(message) ? "model_error" : "expired")
@@ -309,7 +292,7 @@ export async function streamUltronBrainChat(
       }
       if (!content.trim()) throw new Error("The provider completed without returning any text.");
       await recordLocalProviderKeyResult(candidate.provider, candidate.key.id, { outcome: "success", tokens: Math.max(1, Math.ceil(content.length / 4)) }).catch(() => undefined);
-      usageLedger.noteTokens(candidate.key.id, Math.ceil((safeMessages.reduce((sum, m) => sum + m.content.length, 0) + content.length) / 4));
+      usageLedger.noteTokens(`${candidate.key.id}|${candidate.model}`, Math.ceil((safeMessages.reduce((sum, m) => sum + m.content.length, 0) + content.length) / 4));
       return content.trim();
     }
     if (timedOut) throw new Error(DEADLINE_MESSAGE);

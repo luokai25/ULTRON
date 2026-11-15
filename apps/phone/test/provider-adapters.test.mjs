@@ -1,24 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import ts from "typescript";
+import { loadSource } from "./_ts-loader.mjs";
 
-// Transpile the real TypeScript adapters (and the Cohere parser they import) and load them as ESM.
-const toDataUrl = (code) => "data:text/javascript;base64," + Buffer.from(code).toString("base64");
-const transpile = (name) => ts.transpileModule(readFileSync(new URL(`../src/${name}`, import.meta.url), "utf8"), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
-}).outputText;
-async function load() {
-  const cohere = toDataUrl(transpile("cohere-sse.ts"));
-  return import(toDataUrl(transpile("provider-adapters.ts").replace('"./cohere-sse"', JSON.stringify(cohere))));
-}
-const adapters = await load();
+const adapters = await loadSource("provider-adapters.ts");
 const {
   DIRECT_PROVIDERS, ProviderHttpError, parseModelList, parseRetryAfterMs, extractProviderError,
   buildChatRequest, buildModelsRequest, createOpenAiSseDecoder, verifyProviderKey, streamProviderChat,
 } = adapters;
 
-const ALL = ["openrouter", "mistral", "cerebras", "groq", "cohere", "google_ai_studio", "huggingface", "nvidia", "zhipu", "ollama_cloud"];
+const HAND_WRITTEN = ["openrouter", "mistral", "cerebras", "groq", "cohere", "google_ai_studio", "huggingface", "nvidia", "zhipu", "ollama_cloud"];
+const ALL = Object.keys(DIRECT_PROVIDERS);
 
 function fakeTransport({ request, stream } = {}) {
   const calls = [];
@@ -29,11 +21,27 @@ function fakeTransport({ request, stream } = {}) {
   };
 }
 
-test("every provider the key vault supports has a direct adapter", () => {
-  assert.deepEqual(Object.keys(DIRECT_PROVIDERS).sort(), [...ALL].sort());
+test("the registry holds every hand-written provider plus the imported freellmapi chat gateways, all over https", () => {
+  for (const id of HAND_WRITTEN) assert.ok(DIRECT_PROVIDERS[id], id);
+  assert.ok(ALL.length >= 60, `expected at least 60 chat providers, found ${ALL.length}`);
+  const community = ALL.filter((id) => DIRECT_PROVIDERS[id].tier === "community");
+  assert.ok(community.length >= 30, "community gateways are labelled so the UI can warn about them");
+  for (const id of HAND_WRITTEN) assert.notEqual(DIRECT_PROVIDERS[id].tier, "community", `${id} is a first-party provider`);
   for (const id of ALL) {
     for (const url of [DIRECT_PROVIDERS[id].modelsUrl, DIRECT_PROVIDERS[id].chatUrl]) assert.match(url, /^https:\/\//, `${id} must use https`);
+    assert.ok(DIRECT_PROVIDERS[id].label.length > 1);
   }
+  assert.equal(DIRECT_PROVIDERS.github_models, undefined, "GitHub Models was retired upstream");
+});
+
+test("an imported OpenAI-compatible gateway gets standard bearer requests against its own base URL", () => {
+  const id = ALL.find((p) => DIRECT_PROVIDERS[p].tier === "community");
+  const models = buildModelsRequest(id, "key-123456789012");
+  assert.equal(models.headers.Authorization, "Bearer key-123456789012");
+  assert.match(models.url, /\/models$/);
+  const chat = buildChatRequest(id, "key-123456789012", { model: "m", messages: [{ role: "user", content: "hi" }], maxTokens: 256, temperature: 0.3 });
+  assert.match(chat.url, /\/chat\/completions$/);
+  assert.equal(JSON.parse(chat.body).stream, true);
 });
 
 test("every adapter host is in the native Android allowlist, and nothing else is", () => {

@@ -1,4 +1,4 @@
-import type { EligibilityProvider } from "./model-eligibility";
+import { catalogModel, type EligibilityProvider } from "./model-eligibility";
 
 /**
  * Approximate free-tier ceilings per API key, used only to spread load and to keep a key out of rotation shortly
@@ -33,6 +33,24 @@ export const FREE_TIER_LIMITS: Record<EligibilityProvider, FreeTierLimits> = {
   ollama_cloud: { rpm: 10, monthlyTokens: 5_000_000, note: "Free plan: one concurrent request and session caps." },
 };
 
+const UNKNOWN_LIMITS: FreeTierLimits = { monthlyTokens: 0, note: "Community gateway: free-tier limits are not published, so ULTRON relies on the provider's own responses." };
+
+/**
+ * Limits for one provider and model. A model the freellmapi catalogue lists brings its own published per-minute and
+ * per-day caps, which replace the provider-wide defaults.
+ */
+export function limitsFor(provider: EligibilityProvider, model?: string): FreeTierLimits {
+  const base = FREE_TIER_LIMITS[provider] ?? UNKNOWN_LIMITS;
+  const listed = model ? catalogModel(provider, model) : undefined;
+  if (!listed) return base;
+  return {
+    ...base,
+    ...(listed.rpm_limit !== undefined ? { rpm: listed.rpm_limit } : {}),
+    ...(listed.rpd_limit !== undefined ? { rpd: listed.rpd_limit } : {}),
+    ...(listed.tpd_limit !== undefined ? { tpd: listed.tpd_limit } : {}),
+  };
+}
+
 export type CapacityLine = { provider: EligibilityProvider; keys: number; monthlyTokens: number; note: string };
 export type Capacity = { lines: CapacityLine[]; totalMonthlyTokens: number; excluded: EligibilityProvider[] };
 
@@ -47,11 +65,11 @@ export const NOT_AUTO_ROUTED: ReadonlySet<EligibilityProvider> = new Set<Eligibi
 export function estimateFreeCapacity(connectedKeysByProvider: Partial<Record<EligibilityProvider, number>>): Capacity {
   const lines: CapacityLine[] = [];
   const excluded: EligibilityProvider[] = [];
-  for (const provider of Object.keys(FREE_TIER_LIMITS) as EligibilityProvider[]) {
-    const keys = connectedKeysByProvider[provider] ?? 0;
-    if (keys < 1) continue;
+  for (const [provider, keys] of Object.entries(connectedKeysByProvider)) {
+    if (!keys || keys < 1) continue;
     if (NOT_AUTO_ROUTED.has(provider)) { excluded.push(provider); continue; }
-    lines.push({ provider, keys, monthlyTokens: FREE_TIER_LIMITS[provider].monthlyTokens, note: FREE_TIER_LIMITS[provider].note });
+    const limits = limitsFor(provider);
+    lines.push({ provider, keys, monthlyTokens: limits.monthlyTokens, note: limits.note });
   }
   lines.sort((a, b) => b.monthlyTokens - a.monthlyTokens);
   return { lines, totalMonthlyTokens: lines.reduce((sum, line) => sum + line.monthlyTokens, 0), excluded };

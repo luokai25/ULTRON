@@ -1,19 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import ts from "typescript";
 
-const toUrl = (code) => "data:text/javascript;base64," + Buffer.from(code).toString("base64");
+import { loadSource } from "./_ts-loader.mjs";
 const src = (name) => readFileSync(new URL(`../src/${name}`, import.meta.url), "utf8");
-const transpile = (code) => ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
 
-const cohere = toUrl(transpile(src("cohere-sse.ts")));
-const adapters = toUrl(transpile(src("provider-adapters.ts")).replace('"./cohere-sse"', JSON.stringify(cohere)));
-const cloudStub = toUrl("export const addUltronCloudKey = async () => { throw new Error('not used'); };");
 const store = new Map();
 globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, String(v)) };
-const mod = await import(toUrl(transpile(src("bundled-keys.ts")).replace('"./cloud-llm"', JSON.stringify(cloudStub)).replace('"./provider-adapters"', JSON.stringify(adapters))));
-const { parseBundledKeys, seedBundledKeys, isFinalKeyFailure } = mod;
+const { parseBundledKeys, seedBundledKeys, isFinalKeyFailure } = await loadSource("bundled-keys.ts", {
+  "./cloud-llm": "export const addUltronCloudKey = async () => { throw new Error('not used'); };",
+});
 
 const raw = (rows) => JSON.stringify(rows);
 const KEYS = [

@@ -14,7 +14,7 @@
 
 `provider-adapters.ts` verifies keys, lists models and streams chat straight against each provider. On Android the calls go through `UltronProviderHttpPlugin` (HTTPS only, provider host allowlist, request-header allowlist, cancellable streaming). A failure after tokens were shown never falls through to another provider.
 
-Providers: Groq, OpenRouter (:free), Google AI Studio (native Gemini endpoint, supports `AQ.` keys), Mistral, Cohere, Hugging Face, NVIDIA NIM, Z.ai (GLM flash), Ollama Cloud. Cerebras keys are stored but never auto-routed (zero-cost rule). **GitHub Models was retired upstream on 30 July 2026**; do not re-add it.
+Providers: the hand-written adapters (Groq, OpenRouter :free, Google AI Studio via the native Gemini endpoint, Mistral, Cohere, Hugging Face, NVIDIA NIM, Z.ai, Ollama Cloud) plus every OpenAI-compatible chat gateway imported from tashfeenahmed/freellmapi (`src/free-catalog.generated.ts`, 56 more: 13 first-party-style and 43 community gateways). Community gateways are third parties that receive your prompts, so the keys screen labels them and they are only used when you add a key for them. Cerebras keys are stored but never auto-routed (zero-cost rule). **GitHub Models was retired upstream on 30 July 2026**; do not re-add it.
 
 ## Plugins (on-device)
 
@@ -25,6 +25,7 @@ Providers: Groq, OpenRouter (:free), Google AI Studio (native Gemini endpoint, s
 
 ## Free-tier router
 
+- The imported catalogue holds 97 enabled free models on 15 platforms with their published per-minute/day/token caps; those limits and the catalogue's intelligence rank drive Automatic mode for catalogued models. The project's much larger live catalogue (a paid feed) is not imported. Regenerate with `tools/import_freellmapi.py`; keep the native host allowlist in step with `tools/sync_native_allowlist.py`.
 - `usage-ledger.ts` counts requests per minute and requests/tokens per UTC day for every key. Automatic mode ranks candidates by capability minus load, puts keys past their estimated cap at the back, and still treats the provider's 429 as the truth.
 - `free-tier-limits.ts` holds approximate per-key caps and a monthly estimate per provider. The keys screen shows the estimate once per provider, because free tiers are per account and providers ask for one account each. It is an estimate, not a guarantee.
 - `bundled-keys.ts` seeds keys that ship in a build (from the `ULTRON_BUNDLED_KEYS` repository secret) once on first launch.

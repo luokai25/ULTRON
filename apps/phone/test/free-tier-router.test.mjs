@@ -1,20 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import ts from "typescript";
 
-const toUrl = (code) => "data:text/javascript;base64," + Buffer.from(code).toString("base64");
+import { loadSource } from "./_ts-loader.mjs";
 const src = (name) => readFileSync(new URL(`../src/${name}`, import.meta.url), "utf8");
-const transpile = (code) => ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
 
-const eligibility = toUrl(transpile(src("model-eligibility.ts")));
 globalThis.window = { localStorage: { getItem: () => null, setItem: () => {} } };
-const limitsMod = await import(toUrl(transpile(src("free-tier-limits.ts")).replace('"./model-eligibility"', JSON.stringify(eligibility))));
-const limitsUrl = toUrl(transpile(src("free-tier-limits.ts")).replace('"./model-eligibility"', JSON.stringify(eligibility)));
-const ledgerMod = await import(toUrl(transpile(src("usage-ledger.ts")).replace('"./free-tier-limits"', JSON.stringify(limitsUrl))));
-const { FREE_TIER_LIMITS, estimateFreeCapacity, formatTokens, NOT_AUTO_ROUTED } = limitsMod;
-const { createUsageLedger } = ledgerMod;
-const { automaticModels } = await import(eligibility);
+const { FREE_TIER_LIMITS, limitsFor, estimateFreeCapacity, formatTokens, NOT_AUTO_ROUTED } = await loadSource("free-tier-limits.ts");
+const { createUsageLedger } = await loadSource("usage-ledger.ts");
+const { automaticModels } = await loadSource("model-eligibility.ts");
 
 function ledger(startMs = Date.UTC(2026, 10, 14, 12, 0, 0)) {
   const store = new Map();
@@ -87,10 +81,10 @@ test("Z.ai only auto-routes its free flash models; Ollama Cloud routes hosted ch
 
 test("Automatic ranks by load, rests keys past their cap, and counts every attempt", () => {
   const cloud = src("cloud-llm.ts");
-  assert.match(cloud, /usageLedger\.utilization\(key\.id, FREE_TIER_LIMITS\[candidateProvider\]\)/);
+  assert.match(cloud, /usageLedger\.utilization\(`\$\{key\.id\}\|\$\{model\}`, limitsFor\(candidateProvider, model\)\)/, "load is tracked per key and model against that model's own caps");
   assert.match(cloud, /Number\(a\.used >= 1\) - Number\(b\.used >= 1\)/, "exhausted keys go to the back");
-  assert.match(cloud, /usageLedger\.noteRequest\(candidate\.key\.id\)/);
-  assert.match(cloud, /usageLedger\.noteTokens\(candidate\.key\.id/);
+  assert.match(cloud, /usageLedger\.noteRequest\(`\$\{candidate\.key\.id\}\|\$\{candidate\.model\}`\)/);
+  assert.match(cloud, /usageLedger\.noteTokens\(`\$\{candidate\.key\.id\}\|\$\{candidate\.model\}`/);
 });
 
 test("GitHub Models is gone everywhere it was wired in", () => {
@@ -100,4 +94,27 @@ test("GitHub Models is gone everywhere it was wired in", () => {
   assert.doesNotMatch(java, /models\.github\.ai|x-github-api-version/);
   assert.match(java, /"api\.z\.ai"/);
   assert.match(java, /"ollama\.com"/);
+});
+
+test("the freellmapi catalogue is imported: current per-model limits and ranks drive eligibility", async () => {
+  const { catalogModel, freeModel } = await loadSource("model-eligibility.ts");
+  const groq = catalogModel("groq", "llama-3.3-70b-versatile");
+  assert.ok(groq && groq.rpm_limit === 30 && groq.rpd_limit === 1000, "published Groq limits are carried over");
+  assert.ok(catalogModel("google_ai_studio", "gemini-2.5-flash"), "Google ids are mapped from the catalogue's platform name");
+  assert.ok(catalogModel("ollama_cloud", "gpt-oss:120b"), "Ollama ids are mapped from the catalogue's platform name");
+  assert.equal(freeModel("cerebras", "gpt-oss-120b"), false, "Cerebras stays excluded from zero-cost routing even though it is catalogued");
+  assert.equal(freeModel("openrouter", "openai/gpt-5"), false, "paid OpenRouter models are never eligible");
+  const specific = limitsFor("google_ai_studio", "gemini-2.5-flash");
+  assert.equal(specific.rpd, 20, "a model's own cap replaces the provider default");
+  assert.ok(limitsFor("some_community_gateway").monthlyTokens === 0 && /not published/.test(limitsFor("some_community_gateway").note));
+});
+
+test("an imported community gateway is eligible without a catalogue entry, but is labelled and has unknown limits", async () => {
+  const { DIRECT_PROVIDERS } = await loadSource("provider-adapters.ts");
+  const { automaticModels } = await loadSource("model-eligibility.ts");
+  const id = Object.keys(DIRECT_PROVIDERS).find((p) => DIRECT_PROVIDERS[p].tier === "community");
+  assert.deepEqual(automaticModels(id, ["some-chat-model", "text-embedding-x"]), ["some-chat-model"]);
+  const cap = estimateFreeCapacity({ [id]: 1, groq: 1 });
+  assert.equal(cap.totalMonthlyTokens, FREE_TIER_LIMITS.groq.monthlyTokens, "unknown limits add nothing to the estimate");
+  assert.equal(cap.lines.length, 2);
 });

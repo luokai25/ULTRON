@@ -1,11 +1,12 @@
 import { createCohereSseParser } from "./cohere-sse";
+import { IMPORTED_PROVIDERS } from "./free-catalog.generated";
 
 /**
  * Direct device-to-provider adapters. Nothing here talks to an ULTRON server:
  * requests go straight to the provider the user chose, through a transport that
  * is native HTTP on Android and fetch in a development browser.
  */
-export type DirectProviderId = "openrouter" | "mistral" | "cerebras" | "groq" | "cohere" | "google_ai_studio" | "huggingface" | "nvidia" | "zhipu" | "ollama_cloud";
+export type DirectProviderId = string;
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 export type ProviderRequest = { url: string; method: "GET" | "POST"; headers: Record<string, string>; body?: string };
@@ -23,6 +24,8 @@ type ProviderConfig = {
   chatUrl: string;
   format: "openai" | "cohere" | "gemini";
   headers?: Record<string, string>;
+  /** "official" providers are first-party or established gateways; "community" ones are third-party free gateways that receive your prompts. */
+  tier?: "official" | "community";
   /** How the key is sent. Default is a Bearer token. Gemini uses x-goog-api-key so new AQ. keys work. */
   auth?: "bearer" | "x-goog-api-key";
   /** An authenticated call that proves the token is valid, for providers whose model list is public. */
@@ -31,7 +34,7 @@ type ProviderConfig = {
   keyPattern?: RegExp;
 };
 
-export const DIRECT_PROVIDERS: Record<DirectProviderId, ProviderConfig> = {
+const HAND_WRITTEN_PROVIDERS: Record<DirectProviderId, ProviderConfig> = {
   openrouter: {
     label: "OpenRouter", format: "openai",
     modelsUrl: "https://openrouter.ai/api/v1/models",
@@ -92,6 +95,27 @@ export const DIRECT_PROVIDERS: Record<DirectProviderId, ProviderConfig> = {
     chatUrl: "https://ollama.com/v1/chat/completions",
   },
 };
+
+/** Every OpenAI-compatible chat gateway imported from the freellmapi catalogue, built from its base URL. */
+function importedConfigs(): Record<DirectProviderId, ProviderConfig> {
+  const out: Record<DirectProviderId, ProviderConfig> = {};
+  for (const provider of IMPORTED_PROVIDERS) {
+    out[provider.id] = {
+      label: provider.label, format: "openai", tier: provider.tier,
+      modelsUrl: `${provider.base}/models`, chatUrl: `${provider.base}/chat/completions`,
+    };
+  }
+  return out;
+}
+
+/** Hand-written adapters win over imported ones with the same id. */
+export const DIRECT_PROVIDERS: Record<DirectProviderId, ProviderConfig> = { ...importedConfigs(), ...HAND_WRITTEN_PROVIDERS };
+
+export function providerConfig(id: DirectProviderId): ProviderConfig {
+  const config = DIRECT_PROVIDERS[id];
+  if (!config) throw new Error(`Unknown provider "${id}".`);
+  return config;
+}
 
 export class ProviderHttpError extends Error {
   readonly status: number;
@@ -154,7 +178,7 @@ function authHeaders(config: ProviderConfig, apiKey: string): Record<string, str
 }
 
 export function buildModelsRequest(provider: DirectProviderId, apiKey: string): ProviderRequest {
-  const config = DIRECT_PROVIDERS[provider];
+  const config = providerConfig(provider);
   return { url: config.modelsUrl, method: "GET", headers: { ...authHeaders(config, apiKey), Accept: "application/json", ...(config.headers ?? {}) } };
 }
 
@@ -176,7 +200,7 @@ export function toGeminiContents(messages: ChatMessage[]): { systemInstruction?:
 export type ChatParams = { model: string; messages: ChatMessage[]; maxTokens: number; temperature: number };
 
 export function buildChatRequest(provider: DirectProviderId, apiKey: string, params: ChatParams): ProviderRequest {
-  const config = DIRECT_PROVIDERS[provider];
+  const config = providerConfig(provider);
   const maxTokens = Math.max(64, Math.min(16_384, Math.trunc(Number(params.maxTokens)) || 2048));
   const temperature = Math.max(0, Math.min(2, Number.isFinite(Number(params.temperature)) ? Number(params.temperature) : 0.3));
   if (config.format === "gemini") {
@@ -274,13 +298,13 @@ export function createGeminiSseDecoder(): { push(chunk: string, final?: boolean)
 }
 
 export function createChatStreamDecoder(provider: DirectProviderId): { push(chunk: string, final?: boolean): string[] } {
-  const format = DIRECT_PROVIDERS[provider].format;
+  const format = providerConfig(provider).format;
   return format === "cohere" ? createCohereSseParser() : format === "gemini" ? createGeminiSseDecoder() : createOpenAiSseDecoder();
 }
 
 /** Verifies a key against the provider's own model endpoint and returns the chat-capable model ids. */
 export async function verifyProviderKey(provider: DirectProviderId, apiKey: string, transport: ProviderTransport, signal?: AbortSignal): Promise<string[]> {
-  const config = DIRECT_PROVIDERS[provider];
+  const config = providerConfig(provider);
   if (config.keyPattern && !config.keyPattern.test(apiKey)) throw new ProviderHttpError(401, `This does not look like a ${config.label} key.`);
   const modelsRequest = buildModelsRequest(provider, apiKey);
   if (config.verifyUrl) {
@@ -291,7 +315,7 @@ export async function verifyProviderKey(provider: DirectProviderId, apiKey: stri
   if (response.status < 200 || response.status >= 300) throw failure(response);
   let payload: unknown;
   try { payload = JSON.parse(response.body); }
-  catch { throw new ProviderHttpError(502, `${DIRECT_PROVIDERS[provider].label} returned an unreadable model list.`); }
+  catch { throw new ProviderHttpError(502, `${providerConfig(provider).label} returned an unreadable model list.`); }
   return parseModelList(payload);
 }
 

@@ -1,12 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import ts from "typescript";
+import { loadSource } from "./_ts-loader.mjs";
 
-const js = ts.transpileModule(readFileSync(new URL("../src/model-eligibility.ts", import.meta.url), "utf8"), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
-}).outputText;
-const { automaticModels, freeModel } = await import("data:text/javascript;base64," + Buffer.from(js).toString("base64"));
+const { automaticModels, freeModel, catalogModel } = await loadSource("model-eligibility.ts");
 
 test("Automatic only routes to models on the free-tier policy and never to an unknown or paid model", () => {
   assert.deepEqual(automaticModels("groq", ["llama-3.3-70b-versatile", "brand-new-model"]), ["llama-3.3-70b-versatile"]);

@@ -1,5 +1,5 @@
 import { addUltronCloudKey, type CloudProviderId } from "./cloud-llm";
-import { DIRECT_PROVIDERS } from "./provider-adapters";
+import { DIRECT_PROVIDERS, providerConfig } from "./provider-adapters";
 
 /**
  * Provider keys that ship inside this build (injected by CI from the ULTRON_BUNDLED_KEYS secret, never committed).
@@ -64,7 +64,7 @@ export async function seedBundledKeys(
     const n = (counters.get(item.provider) ?? 0) + 1;
     counters.set(item.provider, n);
     if (state[id]) continue;
-    todo.push({ item, id, label: `Built-in ${DIRECT_PROVIDERS[item.provider].label} ${n}` });
+    todo.push({ item, id, label: `Built-in ${providerConfig(item.provider).label} ${n}` });
   }
   let next = 0;
   const worker = async (): Promise<void> => {
