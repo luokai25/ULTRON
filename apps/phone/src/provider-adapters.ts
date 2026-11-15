@@ -5,7 +5,7 @@ import { createCohereSseParser } from "./cohere-sse";
  * requests go straight to the provider the user chose, through a transport that
  * is native HTTP on Android and fetch in a development browser.
  */
-export type DirectProviderId = "openrouter" | "mistral" | "cerebras" | "groq" | "cohere" | "google_ai_studio" | "github_models" | "huggingface" | "nvidia";
+export type DirectProviderId = "openrouter" | "mistral" | "cerebras" | "groq" | "cohere" | "google_ai_studio" | "huggingface" | "nvidia" | "zhipu" | "ollama_cloud";
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
 export type ProviderRequest = { url: string; method: "GET" | "POST"; headers: Record<string, string>; body?: string };
@@ -64,14 +64,6 @@ export const DIRECT_PROVIDERS: Record<DirectProviderId, ProviderConfig> = {
     modelsUrl: "https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",
     chatUrl: "https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse",
   },
-  // GitHub Models: free, rate-limited inference for any GitHub account. The token needs the "models:read" permission.
-  github_models: {
-    label: "GitHub Models", format: "openai",
-    verifyUrl: "https://api.github.com/user",
-    modelsUrl: "https://models.github.ai/catalog/models",
-    chatUrl: "https://models.github.ai/inference/chat/completions",
-    headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
-  },
   // Hugging Face Inference Providers: one OpenAI-compatible router; free signed-in quota. The public model list does not prove the token, so whoami-v2 does.
   huggingface: {
     label: "Hugging Face", format: "openai",
@@ -86,6 +78,18 @@ export const DIRECT_PROVIDERS: Record<DirectProviderId, ProviderConfig> = {
     modelsUrl: "https://integrate.api.nvidia.com/v1/models",
     chatUrl: "https://integrate.api.nvidia.com/v1/chat/completions",
     keyPattern: /^nvapi-[A-Za-z0-9_-]{16,}$/,
+  },
+  // Z.ai (Zhipu GLM), international endpoint: the GLM "-flash" models are free.
+  zhipu: {
+    label: "Z.ai (GLM)", format: "openai",
+    modelsUrl: "https://api.z.ai/api/paas/v4/models",
+    chatUrl: "https://api.z.ai/api/paas/v4/chat/completions",
+  },
+  // Ollama Cloud: the free plan allows cloud-hosted models with usage caps.
+  ollama_cloud: {
+    label: "Ollama Cloud", format: "openai",
+    modelsUrl: "https://ollama.com/v1/models",
+    chatUrl: "https://ollama.com/v1/chat/completions",
   },
 };
 

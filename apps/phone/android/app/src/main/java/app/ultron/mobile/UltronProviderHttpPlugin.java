@@ -39,14 +39,14 @@ public final class UltronProviderHttpPlugin extends Plugin {
         "api.groq.com",
         "api.cohere.com",
         "generativelanguage.googleapis.com",
-        "models.github.ai",
-        "api.github.com",
+        "api.z.ai",
+        "ollama.com",
         "huggingface.co",
         "router.huggingface.co",
         "integrate.api.nvidia.com"
     ));
     private static final Set<String> ALLOWED_HEADERS = new HashSet<>(Arrays.asList(
-        "authorization", "content-type", "accept", "http-referer", "x-title", "x-github-api-version", "x-goog-api-key"
+        "authorization", "content-type", "accept", "http-referer", "x-title", "x-goog-api-key"
     ));
     private static final int MAX_BODY_BYTES = 1_500_000;
     private static final int MAX_PLAIN_RESPONSE_CHARS = 2_000_000;

@@ -18,7 +18,7 @@ const {
   buildChatRequest, buildModelsRequest, createOpenAiSseDecoder, verifyProviderKey, streamProviderChat,
 } = adapters;
 
-const ALL = ["openrouter", "mistral", "cerebras", "groq", "cohere", "google_ai_studio", "github_models", "huggingface", "nvidia"];
+const ALL = ["openrouter", "mistral", "cerebras", "groq", "cohere", "google_ai_studio", "huggingface", "nvidia", "zhipu", "ollama_cloud"];
 
 function fakeTransport({ request, stream } = {}) {
   const calls = [];

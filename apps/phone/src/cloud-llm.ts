@@ -2,6 +2,8 @@ import { RuntimeCache } from "./runtime-cache";
 import { ProviderHttpError, streamProviderChat, verifyProviderKey } from "./provider-adapters";
 import { defaultProviderTransport } from "./provider-transport";
 import { automaticModels, freeModel } from "./model-eligibility";
+import { FREE_TIER_LIMITS } from "./free-tier-limits";
+import { usageLedger } from "./usage-ledger";
 import {
   getLocalProviderKeyCandidates,
   listLocalProviderKeys,
@@ -31,9 +33,10 @@ const PROVIDERS: Record<CloudProviderId, string> = {
   groq: "Groq",
   cohere: "Cohere",
   google_ai_studio: "Google AI Studio",
-  github_models: "GitHub Models",
   huggingface: "Hugging Face",
   nvidia: "NVIDIA NIM",
+  zhipu: "Z.ai (GLM)",
+  ollama_cloud: "Ollama Cloud",
 };
 const SUPPORTED_PROVIDERS = new Set<CloudProviderId>(Object.keys(PROVIDERS) as CloudProviderId[]);
 const cloudModelCache = new RuntimeCache<CloudModel[]>(16, 500_000);
@@ -150,15 +153,16 @@ export async function getUltronCloudStatus(): Promise<{ status: CloudBrainStatus
 /** Built-in directory of the free-tier providers ULTRON can call directly. It is compiled into the app, not fetched. */
 export async function getUltronFreeProviders(_refresh = false): Promise<CloudProviderRegistry | null> {
   return {
-    source: "Built in; researched from cheahjs/free-llm-api-resources, GitHub Models and Hugging Face Inference Providers documentation",
+    source: "Built in; researched from the cheahjs/free-llm-api-resources and tashfeenahmed/freellmapi (MIT) catalogues and each provider's documentation",
     synced_at: "2026-11-13T00:00:00Z",
     providers: [
       { name: "OpenRouter (:free models)", url: "https://openrouter.ai/settings/keys" },
       { name: "Google AI Studio (Gemini free tier)", url: "https://aistudio.google.com/apikey" },
       { name: "Groq", url: "https://console.groq.com/keys" },
-      { name: "GitHub Models", url: "https://github.com/settings/personal-access-tokens/new" },
       { name: "Hugging Face Inference Providers", url: "https://huggingface.co/settings/tokens/new?tokenType=fineGrained" },
       { name: "NVIDIA NIM", url: "https://build.nvidia.com/settings/api-keys" },
+      { name: "Z.ai (GLM flash models)", url: "https://z.ai/manage-apikey/apikey-list" },
+      { name: "Ollama Cloud", url: "https://ollama.com/settings/keys" },
       { name: "Mistral (free plan)", url: "https://console.mistral.ai/api-keys/" },
       { name: "Cohere (trial key)", url: "https://dashboard.cohere.com/api-keys" },
       { name: "Cerebras (stored; not auto-routed)", url: "https://cloud.cerebras.ai" },
@@ -230,11 +234,16 @@ export async function streamUltronBrainChat(
         .sort((x, y) => modelCapabilityScore(y, complexity) - modelCapabilityScore(x, complexity)).slice(0, 3);
       keyCounts.models += models.length;
       if (!selectedModel && !models.length) ineligible.add(PROVIDERS[candidateProvider]);
-      return models.map((model) => ({ provider: candidateProvider, key, model, score: modelCapabilityScore(model, complexity) + (freeModel(candidateProvider, model) ? 5000 : 0) }));
+      const used = usageLedger.utilization(key.id, FREE_TIER_LIMITS[candidateProvider]);
+      return models.map((model) => ({ provider: candidateProvider, key, model, used, score: modelCapabilityScore(model, complexity) + (freeModel(candidateProvider, model) ? 5000 : 0) }));
     });
   }));
+  // Spread load: a key close to its estimated free-tier cap loses rank to fresher keys, and a key past its estimated
+  // cap goes to the back as a last resort. The provider's own 429 still decides whether a key really is exhausted.
+  const rank = (c: { score: number; used: number }): number => c.score - Math.min(c.used, 1) * 400;
   const candidates = candidateGroups.flat().sort((a, b) =>
-    b.score - a.score || b.key.priority - a.key.priority ||
+    Number(a.used >= 1) - Number(b.used >= 1) ||
+    rank(b) - rank(a) || b.key.priority - a.key.priority ||
     Date.parse(a.key.last_used_at ?? "1970-01-01") - Date.parse(b.key.last_used_at ?? "1970-01-01"));
   if (!candidates.length) {
     throw new Error(selectedModel
@@ -263,6 +272,7 @@ export async function streamUltronBrainChat(
       if (skippedKeys.has(candidate.key.id)) continue;
       let emitted = false;
       let content = "";
+      usageLedger.noteRequest(candidate.key.id);
       try {
         content = await streamProviderChat(
           candidate.provider, candidate.key.apiKey,
@@ -299,6 +309,7 @@ export async function streamUltronBrainChat(
       }
       if (!content.trim()) throw new Error("The provider completed without returning any text.");
       await recordLocalProviderKeyResult(candidate.provider, candidate.key.id, { outcome: "success", tokens: Math.max(1, Math.ceil(content.length / 4)) }).catch(() => undefined);
+      usageLedger.noteTokens(candidate.key.id, Math.ceil((safeMessages.reduce((sum, m) => sum + m.content.length, 0) + content.length) / 4));
       return content.trim();
     }
     if (timedOut) throw new Error(DEADLINE_MESSAGE);

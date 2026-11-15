@@ -25,6 +25,8 @@ import { Browser } from "@capacitor/browser";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { initPlugins } from "./plugins-ui";
 import { seedBundledKeys } from "./bundled-keys";
+import { estimateFreeCapacity, formatTokens } from "./free-tier-limits";
+import type { EligibilityProvider } from "./model-eligibility";
 import { budgetConversation, buildCapabilityPrompt as buildBaseCapabilityPrompt, buildReviewPrompt, profileTask, shouldVerifyDraft } from "./capability-kernel";
 import { buildUltronSystemPrompt, prepareUltronSpeech, ULTRON_MOTTO, ULTRON_VOICE } from "./ultron-persona";
 import { buildPresenceIdentityPrompt, selectCommunicationMode, evaluatePresenceEvent, shouldSpeakPresence, createPresenceDeliveryGate, type PresenceEventKind } from "./ultron-presence";
@@ -3864,7 +3866,25 @@ function cloudKeyStateLabel(state: string): string {
   return ({ connected: "Connected", pending: "Checking", invalid: "Invalid", expired: "Expired", rate_limited: "Rate limited", unreachable: "Offline", disabled: "Disabled" } as Record<string, string>)[state] ?? state;
 }
 
+function renderFreeCapacity(groups: CloudProviderGroup[]): void {
+  const element = document.querySelector<HTMLElement>("#cloud-free-capacity");
+  if (!element) return;
+  const counts: Partial<Record<EligibilityProvider, number>> = {};
+  for (const group of groups) if (group.connected_count > 0) counts[group.id as EligibilityProvider] = group.connected_count;
+  const capacity = estimateFreeCapacity(counts);
+  if (!capacity.lines.length) {
+    element.textContent = capacity.excluded.length
+      ? "Your saved key is stored but is not used by Automatic (its free credit is not zero-cost). Add a Groq, Google, OpenRouter, Mistral, Z.ai or Ollama key."
+      : "Add a key to see your estimated free capacity.";
+    return;
+  }
+  const label = (id: string): string => groups.find((group) => group.id === id)?.label ?? id;
+  const parts = capacity.lines.map((line) => `${label(line.provider)} ${formatTokens(line.monthlyTokens)}`).join(" · ");
+  element.textContent = `Estimated free capacity: about ${formatTokens(capacity.totalMonthlyTokens)} tokens a month across ${capacity.lines.length} provider${capacity.lines.length === 1 ? "" : "s"} (${parts}). Counted once per provider because free tiers are per account, and they can change without notice. Automatic rotates your keys and rests a key before its limit.`;
+}
+
 function renderCloudKeyGroups(groups: CloudProviderGroup[]): void {
+  renderFreeCapacity(groups);
   cloudLlmKeysEl.replaceChildren();
   if (!groups.some((group) => group.keys.length)) {
     const empty = document.createElement("small");
@@ -3960,7 +3980,6 @@ function detectCloudLlmProvider(key: string): CloudProviderId | null {
   if (/^csk-[A-Za-z0-9_-]{16,}$/i.test(value)) return "cerebras";
   if (/^hf_[A-Za-z0-9]{16,}$/.test(value)) return "huggingface";
   if (/^nvapi-[A-Za-z0-9_-]{16,}$/.test(value)) return "nvidia";
-  if (/^(?:ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,})$/.test(value)) return "github_models";
   return null;
 }
 
@@ -5054,7 +5073,8 @@ cloudLlmProvider.addEventListener("change", () => {
     groq: { url: "https://console.groq.com/keys", label: "Open Groq API keys ↗" },
     cohere: { url: "https://dashboard.cohere.com/api-keys", label: "Open Cohere API keys ↗" },
     google_ai_studio: { url: "https://aistudio.google.com/apikey", label: "Open Google AI Studio API keys ↗" },
-    github_models: { url: "https://github.com/settings/personal-access-tokens/new", label: "Create a GitHub token (Models: read) ↗" },
+    zhipu: { url: "https://z.ai/manage-apikey/apikey-list", label: "Create a Z.ai API key ↗" },
+    ollama_cloud: { url: "https://ollama.com/settings/keys", label: "Create an Ollama API key ↗" },
     huggingface: { url: "https://huggingface.co/settings/tokens/new?tokenType=fineGrained", label: "Create a Hugging Face token ↗" },
     nvidia: { url: "https://build.nvidia.com/settings/api-keys", label: "Open NVIDIA API keys ↗" },
   };
@@ -5067,8 +5087,10 @@ cloudLlmProvider.addEventListener("change", () => {
       ? "Cerebras currently offers a one-time $5 trial after adding a verified payment method. It expires after 30 days, so ULTRON will verify and store this key but will not use it for automatic zero-cost routing."
       : cloudLlmProvider.value === "cohere"
         ? "Cohere trial keys are free but limited to 1,000 calls per month and 20 chat requests per minute."
-        : cloudLlmProvider.value === "github_models"
-          ? "GitHub Models is free and rate-limited for any GitHub account. Create a fine-grained token with the Models: read permission; no repository access is needed."
+        : cloudLlmProvider.value === "zhipu"
+          ? "Z.ai (Zhipu GLM): the GLM flash models are free. Create a key in the Z.ai console; keys from the Chinese bigmodel.cn console do not work here."
+          : cloudLlmProvider.value === "ollama_cloud"
+            ? "Ollama Cloud: the free plan runs cloud-hosted models with a concurrency and session cap. Create a key at ollama.com/settings/keys."
           : cloudLlmProvider.value === "huggingface"
             ? "Hugging Face Inference Providers include a small free monthly quota for signed-in accounts. Create a fine-grained token with Make calls to Inference Providers."
             : cloudLlmProvider.value === "nvidia"

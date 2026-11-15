@@ -114,3 +114,11 @@ When these checks pass, tell the owner explicitly that it is safe to delete proj
   2. OAuth consent screen: add the three scope groups above and your Google account as a test user. Set publishing status to **In production** (an unverified app is fine for personal use); in *Testing* Google expires the grant after 7 days.
   3. Create an **Android** OAuth client with package `app.ultron.mobile` and the signing certificate SHA-1 printed in each GitHub release's notes.
 - Still to do: GitHub, Notion, Slack, Dropbox and Linear plugins (each needs its own sign-in method), and a device test of the consent flow.
+
+## Free-tier router (on-device)
+
+- Providers called directly from the phone: Groq, OpenRouter (:free), Google AI Studio (native Gemini), Mistral, Cohere, Hugging Face, NVIDIA NIM, Z.ai (GLM flash), Ollama Cloud. Cerebras keys are stored but never auto-routed (zero-cost rule).
+- **GitHub Models was retired upstream on 30 July 2026** and is removed; do not re-add it.
+- `usage-ledger.ts` counts requests per minute and requests/tokens per UTC day for every key. Automatic mode ranks candidates by capability minus load, puts keys past their estimated cap at the back, and still treats the provider's 429 as the truth.
+- `free-tier-limits.ts` holds approximate per-key caps and a monthly estimate per provider. The keys screen shows the estimate once per provider, because free tiers are per account and providers ask for one account each. It is an estimate, not a guarantee.
+- Not ported on purpose: the many unvetted community gateways in freellmapi (they would receive the owner's prompts), its paid live catalog feed, and keyless anonymous endpoints.

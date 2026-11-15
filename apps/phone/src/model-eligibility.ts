@@ -1,15 +1,17 @@
-export type EligibilityProvider = "openrouter" | "mistral" | "cerebras" | "groq" | "cohere" | "google_ai_studio" | "github_models" | "huggingface" | "nvidia";
+export type EligibilityProvider = "openrouter" | "mistral" | "cerebras" | "groq" | "cohere" | "google_ai_studio" | "huggingface" | "nvidia" | "zhipu" | "ollama_cloud";
 
 export function freeModel(provider: EligibilityProvider, model: string): boolean {
   const id = model.toLowerCase();
   if (/(?:audio|tts|speech|transcri|live|realtime|bidi)/i.test(id)) return false;
   if (provider === "openrouter") return id.endsWith(":free");
-  // GitHub Models: free and rate-limited for every GitHub account. Reasoning families have stricter limits and different parameters.
-  if (provider === "github_models") return !/(?:^|\/)(?:o1|o3|o4|gpt-5)/i.test(id);
   // Hugging Face: free signed-in quota across the router; stay on well-known open families.
   if (provider === "huggingface") return /(?:llama-3\.[13]|qwen3|qwen2\.5|gpt-oss|gemma|deepseek|mistral|phi-)/i.test(id);
   // NVIDIA NIM: the hosted catalog is free with developer credits.
   if (provider === "nvidia") return true;
+  // Z.ai: only the GLM flash family is free.
+  if (provider === "zhipu") return /^glm-4\.[5-9]v?-flash/i.test(id);
+  // Ollama Cloud: the free plan covers its hosted models, within session caps.
+  if (provider === "ollama_cloud") return true;
   if (provider === "cerebras") return false; // trial credits need a verified payment method and expire, so not zero-cost
   if (provider === "groq") return /allam.*2.*7b|llama.?3[.-]1.*8b|llama.?3[.-]3.*70b|llama.?4.*scout|groq\/compound|gpt-oss-(120|20)b|qwen3-32b/.test(id);
   if (provider === "mistral") return /^(?:mistral|codestral|ministral|pixtral|magistral|devstral|open-mi[sx]tral)[-_]/.test(id);
