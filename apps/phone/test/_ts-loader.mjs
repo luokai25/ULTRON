@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import { posix } from "node:path";
 
 /**
  * Loads a TypeScript module from ../src for tests: transpiles it and, recursively, every relative module it imports,
@@ -15,7 +16,8 @@ function build(name, stubs) {
   let js = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText;
   js = js.replace(/from\s+"(\.\/[^"]+)"/g, (_all, spec) => {
     if (spec in stubs) return `from "${toUrl(stubs[spec])}"`;
-    const file = spec.replace("./", "") + (spec.endsWith(".mjs") ? "" : ".ts");
+    // Resolve relative to the importing file so modules in subfolders (src/products) can import their siblings.
+    const file = posix.normalize(posix.join(posix.dirname(name), spec)) + (spec.endsWith(".mjs") ? "" : ".ts");
     return `from "${build(file, stubs)}"`;
   });
   const url = toUrl(js);

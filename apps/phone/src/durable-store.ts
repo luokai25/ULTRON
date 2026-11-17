@@ -18,7 +18,8 @@ export type DurableBucket =
   | "memory"
   | "metadata"
   | "artifacts"
-  | "artifact-blobs";
+  | "artifact-blobs"
+  | "products";
 
 export type DurableRecord<T = unknown> = {
   id: string;

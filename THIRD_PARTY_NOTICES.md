@@ -23,3 +23,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+## AI digital products generator (eBook export)
+
+The products tab (`apps/phone/src/products`) builds PDF and EPUB files on the device with these open-source packages. Each is
+bundled unmodified and keeps its own licence.
+
+- jsPDF (MIT), https://github.com/parallax/jsPDF
+- fflate (MIT), https://github.com/101arrowz/fflate
+- Merriweather (SIL Open Font License 1.1) and Open Sans (SIL Open Font License 1.1 / Apache 2.0), embedded in exported PDFs and
+  shown in the in-app reader. Distributed through `@expo-google-fonts/merriweather` and `@expo-google-fonts/open-sans` (MIT).

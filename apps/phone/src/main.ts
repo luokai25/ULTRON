@@ -42,6 +42,8 @@ import { createLearningLedger, validateLearningLedger, recordLearningEvent, prop
 import { nativeSecureStorage } from "./native-secure-storage";
 import { ARTIFACT_URL_PREFIX, deleteLocalArtifact, listLocalArtifacts, localArtifactUrl, saveLocalArtifact, type LocalArtifactMeta } from "./local-artifacts";
 import { deleteDurableRecord, listDurableRecords, putDurableRecord, putDurableRecords, type DurableBucket } from "./durable-store";
+import { detectProductIntent } from "./products/intent";
+import type { LocalRoute as ProductsLocalRoute } from "./products/models";
 
 /* ------------------------------------------------------------------ *
  * Types + themes
@@ -3040,6 +3042,10 @@ async function submitTurn(raw: string): Promise<void> {
 }
 
 async function submit(raw: string): Promise<void> {
+  if (!busy && !pendingAttachments.length) {
+    const intent = detectProductIntent(raw);
+    if (intent) { handOffToProducts(raw, intent.topic); return; }
+  }
   try {
     await submitTurn(raw);
   } catch (error) {
@@ -4399,6 +4405,51 @@ androidAppSettingsButton.addEventListener("click", () => {
     .catch(error => { androidAccessStatus.textContent = error instanceof Error ? error.message : "Could not open app settings."; });
 });
 
+
+// AI Digital Products: loaded on first use so the wizard, PDF and EPUB code stay out of the startup bundle.
+type ProductsController = { open: (options?: { topic?: string; autostart?: boolean }) => void; resume: (id: string) => Promise<void> };
+let productsController: Promise<ProductsController> | null = null;
+function productsTab(): Promise<ProductsController> {
+  productsController ??= import("./products/ui").then(({ mountProducts }) => {
+    const local: ProductsLocalRoute = {
+      ready: () => Capacitor.getPlatform() === "android" && nativeModelLoaded,
+      label: () => nativeLoadedModelName || "On-device model",
+      generate: async (messages, maxTokens, onToken) => (await generateNativeStreaming(messages, maxTokens, onToken)).content,
+    };
+    return mountProducts(req<HTMLElement>("#products-screen"), {
+      local,
+      openKeys: () => { showFeatureScreen("llm-api-keys-screen", navChatButton); renderProviderKeyState(); void refreshCloudLlmScreen(); },
+      openLocalModels: () => openSheet(),
+      onClose: () => { hideFeatureScreens(); setActiveNavigation(navChatButton); },
+    });
+  });
+  productsController.catch(() => { productsController = null; });
+  return productsController;
+}
+async function openProductsTab(options?: { topic?: string; autostart?: boolean }): Promise<void> {
+  showFeatureScreen("products-screen", navChatButton);
+  (await productsTab()).open(options);
+}
+req<HTMLButtonElement>("#drawer-products").addEventListener("click", () => { void openProductsTab().catch((error) => { hideFeatureScreens(); console.error("[ULTRON products]", error); }); });
+
+/** "Make me an ebook about X" in normal chat: Ultron builds it in the products tab, so it lands in the projects gallery. */
+function handOffToProducts(raw: string, topic: string): void {
+  let convo = active();
+  if (!convo) { convo = { id: uid(), title: "New conversation", updatedAt: Date.now(), messages: [] }; store.conversations.push(convo); store.activeId = convo.id; }
+  const text = raw.trim();
+  if (convo.messages.length === 0) convo.title = text.length > 44 ? `${text.slice(0, 43)}…` : text;
+  convo.messages.push({ role: "user", content: text });
+  convo.messages.push({ id: uid(), role: "assistant", content: topic
+    ? `I'm building this in **AI Digital Products**: I'll research "${topic}", find the strongest offer, and write the book step by step. It's saved to Projects in that tab as it goes, and you can export it as PDF or EPUB when it's done.`
+    : "I opened **AI Digital Products**. Tell me what the book is about there, and I'll research it, outline it and write it. Everything is saved in Projects." });
+  convo.updatedAt = Date.now();
+  saveStore();
+  promptEl.value = "";
+  autosize();
+  renderConversation();
+  renderHistory();
+  void openProductsTab({ topic, autostart: topic.length >= 3 }).catch((error) => { hideFeatureScreens(); console.error("[ULTRON products]", error); });
+}
 
 req<HTMLButtonElement>("#drawer-llm-api-keys").addEventListener("click", () => {
   showFeatureScreen("llm-api-keys-screen", navChatButton);

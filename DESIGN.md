@@ -185,6 +185,7 @@ All current screens are in scope. Do not treat the home/chat screen as the whole
 | Model library | `#nav-models`, model discovery controls | Search/filter/import/download/load/benchmark flows with progress and storage warnings |
 | Memory / Mind Map | `#vault-screen`, `#mindmap-search` | Readable graph, search, selected-node detail, empty/loading/error states, mobile pan/zoom controls |
 | Agents & Identities | `#agent-identities-screen` | Clear identity list, active identity, capabilities, model and brain status |
+| AI Digital Products | `#products-screen` | Guided wizard from idea to finished eBook: model picker (automatic, provider keys, free providers, on-device), live progress with stop and resume, projects gallery, in-app reader in the book's own palette, PDF/EPUB/HTML/Markdown export. Every step is saved on the device |
 | LLM API Keys | `#llm-api-keys-screen` | One universal paste flow, detected provider, masked key metadata, verify/save/remove states, never expose secrets |
 | Learning Review | `#learning-screen` | Evidence-based learning queue, before/after context, approve/reject/undo states |
 | ULTRON Capabilities | `#capabilities-screen` | Capability inventory, permission level, enabled state, tool/skill/run groupings |

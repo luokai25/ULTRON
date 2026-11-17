@@ -97,11 +97,12 @@ Do not mark a browser, emulator or device check complete from source inspection 
 
 ## Shared client screen inventory
 
-The six full-screen destinations in `apps/phone/index.html` are:
+The full-screen destinations in `apps/phone/index.html` are:
 
 | Screen | Element ID |
 | --- | --- |
 | Agent identities | `agent-identities-screen` |
+| AI digital products | `products-screen` |
 | LLM API keys | `llm-api-keys-screen` |
 | Memory / Vault | `vault-screen` |
 | Learning Review | `learning-screen` |

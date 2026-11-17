@@ -20,7 +20,11 @@
     "@capacitor/android": "^6.2.0",
     "@capacitor/browser": "^6.0.2",
     "@capacitor/core": "^6.2.0",
+    "@expo-google-fonts/merriweather": "0.4.2",
+    "@expo-google-fonts/open-sans": "0.4.2",
     "@ultron/connectors": "workspace:*",
+    "fflate": "0.8.2",
+    "jspdf": "4.2.1",
     "mammoth": "1.9.1",
     "pdfjs-dist": "4.10.38",
     "three": "^0.169.0"
