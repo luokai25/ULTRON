@@ -1,4 +1,5 @@
 import { BOOK_FORMATS, DEPTH_SPEC, type Product } from "./types";
+import { digestsForSection } from "./deep-research";
 import { isSafeCategory } from "./scoring";
 
 export const BANNED = "Never use: 'in today's fast-paced world', 'unlock', 'game-changer', 'delve', 'tapestry', 'navigate the complexities', 'it's not X, it's Y' constructions, rhetorical-question openers, or more than one em dash per page. No guru voice, no hype, no invented statistics, no fake testimonials, no fake studies.";
@@ -26,7 +27,7 @@ export function brief(product: Product): string {
   if (product.summary?.glossary.length) lines.push("NAMED FRAMEWORKS (use these exact names consistently): " + product.summary.glossary.map((g) => `${g.term} = ${clip(g.meaning, 80)}`).join("; "));
   lines.push(`VOICE: ${clip(product.custom.tone, 220)}`);
   if (product.custom.notes.trim()) lines.push(`AUTHOR NOTES: ${clip(product.custom.notes, 500)}`);
-  if (product.research?.notes) lines.push(`MARKET RESEARCH (from the web): ${clip(product.research.notes, 900)}`);
+  if (product.research?.notes) lines.push(`MARKET RESEARCH (from ${product.research.deep ? `${product.research.digests?.length ?? 0} web sources the app read` : "the web"}): ${clip(product.research.notes, product.research.deep ? 2400 : 900)}`);
   if (product.creator?.notes) lines.push(`CREATOR MATERIAL (public, consented): ${clip(product.creator.notes, 900)}`);
   const refs = product.custom.references.map((r) => `[${r.name}] ${clip(r.text, 500)}`).join("\n");
   if (refs) lines.push("SUPPORTING REFERENCES:\n" + clip(refs, 1500));
@@ -63,16 +64,59 @@ export const promptSummary = (product: Product): string => {
 export const promptChapterPlan = (product: Product): string => {
   const d = DEPTH_SPEC[product.custom.depth];
   const o = product.outlines.find((x) => x.id === product.outlineId);
-  return `${brief(product)}\n\nApproved outline chapters:\n${(o?.chapters ?? []).map((c, i) => `${i + 1}. ${c.title} — ${c.purpose}`).join("\n")}\n\nTask: plan the chapters. Produce an introduction, ${d.chapters} core chapters mapped to the transformation stages in order (a stage may split across two chapters; the last core chapter must measure whether the outcome happened), a conclusion, then the bonus materials. Keep the approved outline's chapter titles where they fit.\nReturn JSON: {"sections":[{"kind":"intro|chapter|conclusion|bonus","title":"","purpose":"what this section must accomplish in one sentence"}]}`;
+  return `${brief(product)}\n\nApproved outline chapters:\n${(o?.chapters ?? []).map((c, i) => `${i + 1}. ${c.title} — ${c.purpose}`).join("\n")}\n\nTask: plan the chapters. Produce an introduction, ${d.chapters} core chapters mapped to the transformation stages in order (a stage may split across two chapters; the last core chapter must measure whether the outcome happened), a conclusion, then ${d.bonuses} bonus materials (diagnostics, templates, checklists or cards). Keep the approved outline's chapter titles where they fit.\nReturn JSON: {"sections":[{"kind":"intro|chapter|conclusion|bonus","title":"","purpose":"what this section must accomplish in one sentence"}]}`;
 };
 
-export function promptSection(product: Product, index: number, previousTail: string, imagesHere: number): string {
+/** Source excerpts for this section, numbered so the writer can cite them and the book can list them. */
+export function sourceNotes(product: Product, title: string, purpose: string): string {
+  const ds = product.research?.digests;
+  if (!ds?.length) return "";
+  const picked = digestsForSection(ds, title, purpose, 6);
+  if (!picked.length) return "";
+  return `\nSOURCE NOTES FOR THIS SECTION (from pages the app actually read; use facts only from here or from general knowledge, never invent numbers, studies or quotes; when you use a specific fact from a note, add its number in brackets like [12]):\n${picked.map((d) => `[${d.n}] ${clip(d.digest, 380)}`).join("\n")}\n`;
+}
+
+function sectionTarget(product: Product, index: number): number {
+  const s = product.sections[index];
+  const d = DEPTH_SPEC[product.custom.depth];
+  return s?.kind === "bonus" ? Math.round(d.words[0] * 0.6) : s?.kind === "intro" || s?.kind === "conclusion" ? Math.round(d.words[0] * 0.8) : Math.round((d.words[0] + d.words[1]) / 2);
+}
+
+const DIALECT = `OUTPUT DIALECT (plain text, no JSON, no code fences, no title line):
+## Heading            (use headings to organise the text)
+paragraphs separated by blank lines; **bold** sparingly
+> LABEL: one-to-two sentence rule of thumb      (LABEL is 1-3 capital words)
+- [ ] checklist item                              (for exercises or templates)
+::timeline TITLE IN CAPITALS
+- when | step name | TAG | one line
+::end
+::table
+| Column | Column |
+| cell | cell |
+::end`;
+
+export function promptSection(product: Product, index: number, previousTail: string, imagesHere: number, part: 1 | 2 = 1, firstPart: string = ""): string {
   const s = product.sections[index];
   if (!s) throw new Error("Unknown section");
   const d = DEPTH_SPEC[product.custom.depth];
-  const target = s.kind === "bonus" ? Math.round(d.words[0] * 0.6) : s.kind === "intro" || s.kind === "conclusion" ? Math.round(d.words[0] * 0.8) : Math.round((d.words[0] + d.words[1]) / 2);
+  const two = d.parts === 2 && s.kind !== "bonus";
+  const total = sectionTarget(product, index);
+  const target = two ? (part === 1 ? Math.round(total * 0.55) : Math.round(total * 0.5)) : total;
   const outline = product.sections.map((x, i) => `${i + 1}. ${x.title}${i === index ? "  <-- WRITE THIS" : ""}`).join("\n");
-  return `${brief(product)}\n\nBOOK OUTLINE:\n${outline}\n${product.runningSummary ? `\nWHAT HAS BEEN COVERED SO FAR (do not repeat it):\n${product.runningSummary}\n` : ""}${previousTail ? `\nEnd of the previous section, for continuity:\n"${clip(previousTail, 400)}"\n` : ""}\nTask: write the ${s.kind === "bonus" ? "bonus material" : s.kind} titled "${s.title}". Purpose: ${s.purpose}\nTarget length about ${target} words. ${BOOK_FORMATS[product.custom.bookFormat].rule}\nOpen with something concrete (a scene, a number to count, a mistake people make), never with a definition. Use the named frameworks by their exact names. Give at least one worked example with specifics. End with one small action the reader can do today.\n${imagesHere > 0 ? `Include exactly ${imagesHere} illustration slot${imagesHere > 1 ? "s" : ""} as a line "::image <a concrete visual description, no text in the picture>".\n` : "Do not include images.\n"}${BANNED}\n\nOUTPUT DIALECT (plain text, no JSON, no code fences, no title line):\n## Heading            (use 1-3 headings)\nparagraphs separated by blank lines; **bold** sparingly\n> LABEL: one-to-two sentence rule of thumb      (1 callout; LABEL is 1-3 capital words)\n- [ ] checklist item                              (for exercises or templates)\n::timeline TITLE IN CAPITALS\n- when | step name | TAG | one line\n::end\n::table\n| Column | Column |\n| cell | cell |\n::end\nStart writing now.`;
+  const common = `${brief(product)}\n\nBOOK OUTLINE:\n${outline}\n${product.runningSummary ? `\nWHAT HAS BEEN COVERED SO FAR (do not repeat it):\n${product.runningSummary}\n` : ""}${sourceNotes(product, s.title, s.purpose)}`;
+  if (two && part === 2) {
+    return `${common}\nHere is the first half of "${s.title}" that is already written (do not repeat any of it):\n"""\n${clip(firstPart, 1800)}\n"""\n\nTask: write the SECOND half of the ${s.kind} titled "${s.title}". About ${target} words of NEW material only. ${BOOK_FORMATS[product.custom.bookFormat].rule}\nInclude: one worked example with concrete numbers or a named scenario, the most common mistakes and how to fix each, and a short exercise the reader can do. Use the named frameworks by their exact names. End with one small action the reader can do today. Start directly with a new "## " heading. Do not summarise the first half.\n${BANNED}\n\n${DIALECT}\nStart writing now.`;
+  }
+  return `${common}${previousTail ? `\nEnd of the previous section, for continuity:\n"${clip(previousTail, 400)}"\n` : ""}\nTask: write ${two ? "the FIRST half of " : ""}the ${s.kind === "bonus" ? "bonus material" : s.kind} titled "${s.title}". Purpose: ${s.purpose}\nTarget length about ${target} words${two ? " (a second call will write the second half, so do not conclude the section)" : ""}. ${BOOK_FORMATS[product.custom.bookFormat].rule}\nOpen with something concrete (a scene, a number to count, a mistake people make), never with a definition. Use the named frameworks by their exact names. ${two ? "Teach the core idea clearly with at least one example." : "Give at least one worked example with specifics. End with one small action the reader can do today."}\n${imagesHere > 0 ? `Include exactly ${imagesHere} illustration slot${imagesHere > 1 ? "s" : ""} as a line "::image <a concrete visual description, no text in the picture>".\n` : "Do not include images.\n"}${BANNED}\n\n${DIALECT}\n::image describe the picture\nStart writing now.`;
+}
+
+/** Adds new material to a finished section when the measured PDF is shorter than the target length. */
+export function promptExpand(product: Product, index: number, words: number): string {
+  const s = product.sections[index];
+  if (!s) throw new Error("Unknown section");
+  const headings = s.blocks.filter((b) => b.type === "heading").map((b) => (b.type === "heading" ? b.text : "")).join("; ");
+  const lastPara = [...s.blocks].reverse().find((b) => b.type === "paragraph");
+  return `${brief(product)}\n${sourceNotes(product, s.title, s.purpose)}\nThe ${s.kind} "${s.title}" is already written. Headings so far: ${headings || "none"}.${lastPara && lastPara.type === "paragraph" ? `\nIts last paragraph: "${clip(lastPara.text, 300)}"` : ""}\n\nTask: add about ${words} words of NEW, useful material to this section that does not repeat anything above. Choose what fits best: a realistic scenario told step by step with specifics, troubleshooting for what goes wrong and why, a comparison of two approaches with trade-offs, a short checklist or table the reader can reuse, or answers to the questions readers ask most. Start with a new "## " heading. Do not conclude the book and do not summarise.\n${BANNED}\n\n${DIALECT}\nStart writing now.`;
 }
 
 export const promptBranding = (product: Product): string =>
@@ -83,3 +127,6 @@ export const promptStore = (product: Product): string =>
 
 export const promptTrends = (headlines: string[]): string =>
   `Here are today's public trending search topics and headlines:\n${headlines.slice(0, 40).map((h) => "- " + h).join("\n")}\n\nTask: turn them into 6 evergreen digital-product ideas a solo creator could sell as an eBook (practical topics people pay to learn; skip celebrity, sports scores and tragedy). Each idea is a short phrase.\nReturn JSON: {"ideas":["..."]}`;
+
+export const promptCondense = (batch: string, topic: string): string =>
+  `Numbered excerpts from web pages about "${topic}":\n${batch}\n\nTask: write 6-8 bullets with the most useful concrete facts, advice, numbers and common mistakes found across these excerpts. End each bullet with the [n] numbers of the excerpts it comes from. No opinions of your own, no filler, no claims that are not in the excerpts. Maximum 1100 characters.`;

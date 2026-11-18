@@ -40,6 +40,22 @@ Files are stored with the other generated files (Agent Workspace) and can be sha
 "Make me an ebook about X" in normal chat opens the tab, starts the build and records a short reply in the conversation.
 `intent.ts` is deliberately conservative: it needs a creation verb plus a product noun and ignores questions and code talk.
 
+## Long books (45 and 50+ pages)
+
+Depth tiers: Quick (~15 pp), Complete (~30), Deep Dive (~40), **Long Book (45 pp)** and **Full Book (50+ pp)**. Each chapter of a
+deep or long book is written in two model calls (core teaching, then a worked example, mistakes and an exercise), which keeps every
+call inside free-tier output limits. Models routinely write less than asked, so the length is **measured on the real PDF** and
+the shortest chapters are expanded with new material until the target is met (the loop scales its asks by how much the model
+actually delivers and stops if it stops producing). Measured with a deliberately stingy test model: 45 and 50 pages both reached.
+
+## Research depth (up to 150 sources)
+
+Quick (~8 sources), Standard (~40) or Deep (up to 150). Deep research expands the topic into ~22 searches, discovers up to 300 pages,
+reads them politely (robots.txt, 2 pages per site, 600 ms per-site delay, 8 in parallel), keeps the most relevant sentences of each
+page, condenses them in batches of 25 through the model, and numbers the survivors. Every chapter is given its own most relevant source
+notes and told not to state facts that are not in them; cited `[n]` numbers become a **Sources and further reading** section in the
+PDF, EPUB, web page and Markdown. Only pages that were actually read are listed.
+
 ## Not built yet
 
-Course and coaching formats, Scrapling-style stealth fetching, web search for chat, and keyless providers.
+Course and coaching formats, keyless free providers, a UI for teaching sites new APIs (the engine exists, see `web/`).

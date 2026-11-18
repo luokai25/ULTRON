@@ -1,8 +1,8 @@
 import { asArray, asRecord, asString, clampScore, extractJson } from "./json";
 import { blocksToMarkdown, countWords, normalizeBlocks, parseBlocks } from "./blocks";
-import { brief, promptBrainstorm, promptBranding, promptChapterPlan, promptDirections, promptOutline, promptRefineVtm, promptScore, promptSection, promptStore, promptSummary, promptTrends, promptVtm, SYSTEM_JSON, SYSTEM_WRITER } from "./prompts";
+import { brief, promptBrainstorm, promptBranding, promptChapterPlan, promptDirections, promptExpand, promptOutline, promptRefineVtm, promptScore, promptSection, promptStore, promptSummary, promptTrends, promptVtm, SYSTEM_JSON, SYSTEM_WRITER } from "./prompts";
 import { overallScore, rankPockets, isSafeCategory } from "./scoring";
-import { DEFAULT_CUSTOM, DEPTH_SPEC, FONT_ALLOWLIST, type Block, type Brand, type Charter, type Direction, type EbookSummary, type Outline, type Pocket, type Product, type ProductMode, type Section, type SectionKind, type StoreCopy, type Vtm } from "./types";
+import { DEFAULT_CUSTOM, DEPTH_SPEC, estimatePages, FONT_ALLOWLIST, WORDS_PER_PAGE, type Block, type Brand, type Charter, type Direction, type EbookSummary, type Outline, type Pocket, type Product, type ProductMode, type Section, type SectionKind, type StoreCopy, type Vtm } from "./types";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
 export type CompleteOptions = { maxTokens: number; signal?: AbortSignal; onToken?: (token: string) => void };
@@ -11,6 +11,7 @@ export type Completer = (messages: Msg[], options: CompleteOptions) => Promise<s
 export type Progress =
   | { phase: "directions" | "brainstorm" | "score"; done: number; total: number; label: string }
   | { phase: "section"; index: number; total: number; words: number; wave: number; waves: number }
+  | { phase: "pages"; pages: number; target: number; round: number }
   | { phase: "note"; label: string };
 
 export type EngineEnv = {
@@ -27,6 +28,8 @@ export type EngineEnv = {
   sleep?: (ms: number) => Promise<void>;
   /** Optional illustration generator; failures are tolerated. */
   image?: (prompt: string, brandMood: string, signal?: AbortSignal) => Promise<{ mime: string; data: string } | null>;
+  /** Real length of the finished PDF. Falls back to a calibrated estimate when absent. */
+  measurePages?: (product: Product) => Promise<number> | number;
 };
 
 const defaultSleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -245,8 +248,8 @@ export async function buildSummary(product: Product, env: EngineEnv): Promise<Eb
   }, 1800);
   const sectionCount = d.chapters + 2 + Math.max(1, parsed.bonuses.length);
   const avg = (d.words[0] + d.words[1]) / 2;
-  const low = Math.round((sectionCount * avg * 0.8) / 50) * 50;
-  const high = Math.round((sectionCount * avg * 1.2) / 50) * 50;
+  const low = d.pages ? Math.round((d.pages * 225) / 50) * 50 : Math.round((sectionCount * avg * 0.8) / 50) * 50;
+  const high = d.pages ? Math.round((d.pages * 285) / 50) * 50 : Math.round((sectionCount * avg * 1.2) / 50) * 50;
   product.summary = { ...parsed, wordRange: [low, high], readingMinutes: Math.max(5, Math.round(((low + high) / 2) / 230)) };
   product.title = parsed.title;
   log(product, env, "structure", `Summary: ${parsed.title}`);
@@ -307,23 +310,35 @@ function lastParagraph(section: Section | undefined): string {
   return "";
 }
 
+async function callWriter(env: EngineEnv, section: Section, prompt: string, maxTokens: number, streamPrefix = ""): Promise<string> {
+  let streamed = "";
+  return env.complete([{ role: "system", content: SYSTEM_WRITER }, { role: "user", content: prompt }], {
+    maxTokens, signal: env.signal, onToken: (t) => { streamed += t; env.stream?.(section.id, streamPrefix + streamed); },
+  });
+}
+
+const sameHeading = (a: string, b: string): boolean => a.toLowerCase().replace(/[^a-z0-9]/g, "") === b.toLowerCase().replace(/[^a-z0-9]/g, "");
+
 export async function writeSection(product: Product, index: number, env: EngineEnv, slots: Map<number, number> = imageSlots(product)): Promise<Section> {
   const section = product.sections[index];
   if (!section) throw new Error("Unknown section");
   const wantImages = slots.get(index) ?? 0;
+  const spec = DEPTH_SPEC[product.custom.depth];
+  const two = spec.parts === 2 && section.kind !== "bonus";
   section.status = "writing"; section.error = undefined;
   let attempt = 0;
   for (;;) {
     abortIf(env);
     try {
-      let streamed = "";
-      const prompt = promptSection(product, index, lastParagraph(product.sections[index - 1]), wantImages);
-      const text = await env.complete([{ role: "system", content: SYSTEM_WRITER }, { role: "user", content: prompt }], {
-        maxTokens: DEPTH_SPEC[product.custom.depth].words[1] * 2 + 700, signal: env.signal,
-        onToken: (t) => { streamed += t; env.stream?.(section.id, streamed); },
-      });
-      let blocks = normalizeBlocks(parseBlocks(text));
-      blocks = blocks.filter((b, i) => !(i === 0 && b.type === "heading" && b.text.toLowerCase().replace(/[^a-z0-9]/g, "") === section.title.toLowerCase().replace(/[^a-z0-9]/g, "")));
+      const first = await callWriter(env, section, promptSection(product, index, lastParagraph(product.sections[index - 1]), wantImages, 1), spec.words[1] * 2 + 700);
+      let blocks = normalizeBlocks(parseBlocks(first));
+      blocks = blocks.filter((b, i) => !(i === 0 && b.type === "heading" && sameHeading(b.text, section.title)));
+      if (two) {
+        // The second half is a separate call so each stays within free-tier output limits and the chapter reaches full length.
+        const second = await callWriter(env, section, promptSection(product, index, "", 0, 2, blocksToMarkdown(blocks)), spec.words[1] * 2 + 700, blocksToMarkdown(blocks) + "\n\n");
+        const more = normalizeBlocks(parseBlocks(second)).filter((b) => b.type !== "image");
+        if (countWords(more) >= 40) blocks = normalizeBlocks([...blocks, ...more]);
+      }
       blocks = keepImages(blocks, wantImages);
       const words = countWords(blocks);
       if (words < 60) throw new Error("The section came back too short.");
@@ -335,6 +350,45 @@ export async function writeSection(product: Product, index: number, env: EngineE
       await (env.sleep ?? defaultSleep)(1500 * attempt);
     }
   }
+}
+
+/**
+ * Measures the finished PDF and, while it is shorter than the target, asks for new material in the shortest chapters.
+ * Models usually under-deliver on length, so the target is met by measuring rather than trusting the requested word counts.
+ */
+export async function expandToTarget(product: Product, env: EngineEnv, targetPages: number, sourcePages = 0): Promise<{ pages: number; rounds: number; added: number }> {
+  const measure = async (): Promise<number> => (env.measurePages ? await env.measurePages(product) : estimatePages(product.sections, sourcePages));
+  let pages = await measure(); let added = 0; let rounds = 0;
+  let yieldRatio = 1; // how much of the requested length the model really delivers; asks are scaled by it
+  env.progress?.({ phase: "pages", pages, target: targetPages, round: 0 });
+  while (pages < targetPages && rounds < 14) {
+    abortIf(env);
+    rounds++;
+    const deficit = (targetPages - pages + 1) * WORDS_PER_PAGE * 0.92;
+    const candidates = product.sections.map((s, i) => ({ s, i })).filter((x) => x.s.status === "done" && x.s.kind !== "bonus").sort((a, b) => a.s.words - b.s.words);
+    if (!candidates.length) break;
+    const perSection = Math.min(800, Math.max(260, Math.round(deficit / Math.max(1, Math.ceil(deficit / 520)))));
+    const count = Math.min(candidates.length, Math.max(1, Math.ceil(deficit / (perSection * yieldRatio))), 8);
+    const picked = candidates.slice(0, count);
+    let roundAdded = 0;
+    await pool(picked, Math.min(env.concurrency ?? 2, picked.length), async ({ s, i }) => {
+      try {
+        const text = await callWriter(env, s, promptExpand(product, i, perSection), perSection * 2 + 500);
+        const more = normalizeBlocks(parseBlocks(text)).filter((b) => b.type !== "image");
+        const gained = countWords(more);
+        if (gained >= 60) { s.blocks = normalizeBlocks([...s.blocks, ...more]); s.words = countWords(s.blocks); roundAdded += gained; }
+      } catch (error) { if (error instanceof DOMException && error.name === "AbortError") throw error; }
+    });
+    added += roundAdded;
+    yieldRatio = Math.min(1, Math.max(0.15, roundAdded / (count * perSection)));
+    await save(env, product);
+    pages = await measure();
+    env.progress?.({ phase: "pages", pages, target: targetPages, round: rounds });
+    if (roundAdded < 60) break;
+  }
+  if (added) log(product, env, "manuscript", `Expanded to ${pages} pages (+${added} words)`);
+  await save(env, product);
+  return { pages, rounds, added };
 }
 
 /** Writes pending sections in waves. Safe to call again after a stop or failure: finished sections are kept. */

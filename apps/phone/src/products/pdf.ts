@@ -1,5 +1,5 @@
 import { stripInline } from "./blocks";
-import { bookSubtitle, bookTitle, brandOf, disclaimerOf, imageLookup, sectionLabel } from "./book";
+import { bookSubtitle, bookTitle, brandOf, disclaimerOf, imageLookup, sectionLabel, usedSources } from "./book";
 import { wrapTitle } from "./cover";
 import type { Block, Product } from "./types";
 
@@ -45,7 +45,9 @@ export function imageSize(base64: string, mime: string): { w: number; h: number 
   return null;
 }
 
-export function buildPdf(p: Product, deps: PdfDeps): Uint8Array {
+export function buildPdf(p: Product, deps: PdfDeps): Uint8Array { return buildPdfWithInfo(p, deps).bytes; }
+
+export function buildPdfWithInfo(p: Product, deps: PdfDeps): { bytes: Uint8Array; pages: number } {
   const brand = brandOf(p);
   const doc = new deps.jsPDF({ unit: "mm", format: [PAGE_W, PAGE_H], orientation: "portrait", compress: true });
   doc.addFileToVFS("BookDisplay-Bold.ttf", deps.fonts.display); doc.addFont("BookDisplay-Bold.ttf", "BookDisplay", "bold");
@@ -227,6 +229,27 @@ export function buildPdf(p: Product, deps: PdfDeps): Uint8Array {
     for (const b of s.blocks) renderBlock(b);
   }
 
+  // ----- sources -----
+  const sources = usedSources(p);
+  if (sources.length) {
+    newPage();
+    const start = doc.getNumberOfPages();
+    sectionStarts.add(start); tocEntries.push({ title: "Sources and further reading", page: start });
+    y = MT + 8;
+    font("BookBody", "bold", 7.5); ink(color.accent); doc.setCharSpace?.(0.9); doc.text("SOURCES", MX, y); doc.setCharSpace?.(0);
+    y += 8; font("BookDisplay", "bold", 20); ink(color.type);
+    for (const l of wrapTitle("Sources and further reading", 24, 3)) { doc.text(l, MX, y); y += 9.2; }
+    fill(color.accent); doc.rect(MX, y - 3, 14, 1.2, "F"); y += 8;
+    for (const src of sources) {
+      const head = paragraph(`[${src.n}] ${src.title}`, { size: 8.4, bold: true, leading: 1.35, measureOnly: true, x: MX, width: W });
+      ensure(head + 8);
+      paragraph(`[${src.n}] ${src.title}`, { size: 8.4, bold: true, leading: 1.35 });
+      font("BookBody", "normal", 7); ink(color.muted);
+      for (const l of doc.splitTextToSize(src.url.length > 140 ? src.url.slice(0, 140) + "…" : src.url, W) as string[]) { ensure(3.4); doc.text(l, MX, y + 2); y += 3.3; }
+      y += 2.2;
+    }
+  }
+
   // ----- contents page, running header and page numbers -----
   doc.setPage(3);
   font("BookDisplay", "bold", 18); ink(color.type); doc.text("Contents", MX, MT + 8);
@@ -245,5 +268,5 @@ export function buildPdf(p: Product, deps: PdfDeps): Uint8Array {
     doc.text(String(i), PAGE_W / 2, PAGE_H - 10, { align: "center" });
     if (!sectionStarts.has(i)) doc.text(wrapTitle(title, 60, 1)[0] ?? title, PAGE_W / 2, 11, { align: "center" });
   }
-  return new Uint8Array(doc.output("arraybuffer"));
+  return { bytes: new Uint8Array(doc.output("arraybuffer")), pages: total };
 }

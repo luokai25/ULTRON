@@ -2,9 +2,12 @@ import "./products.css";
 import { blocksToHtml } from "./blocks";
 import { bookTitle, brandOf, disclaimerOf, imageLookup, sectionLabel } from "./book";
 import { fetchPage, generateIllustration, isPublicHttpUrl, research } from "./browser";
+import { deepResearch } from "./deep-research";
+import { promptCondense, SYSTEM_WRITER } from "./prompts";
 import { clear, ago, el, shareBlob } from "./dom";
-import { approveOutline, buildSummary, buildVtm, designBranding, buildStore, discoverPockets, generateOutlines, newProduct, planChapters, qualityReport, refineVtm, renderImages, reviseOutline, writeManuscript, type EngineEnv, type Progress } from "./engine";
-import { exportProduct, FONT_URLS, FORMAT_INFO, renderExport, type ExportFormat } from "./export-runtime";
+import { browserParse } from "../web/page";
+import { approveOutline, buildSummary, expandToTarget, buildVtm, designBranding, buildStore, discoverPockets, generateOutlines, newProduct, planChapters, qualityReport, refineVtm, renderImages, reviseOutline, writeManuscript, type EngineEnv, type Progress } from "./engine";
+import { exportProduct, FONT_URLS, FORMAT_INFO, measurePdfPages, renderExport, type ExportFormat } from "./export-runtime";
 import { createHttp } from "./http";
 import { createCompleter, describeChoice, listModelOptions, NO_MODEL_MESSAGE, type LocalRoute, type ModelChoice, type ModelOptionList } from "./models";
 import { cardOf, deleteProduct, listProducts, loadProduct, saveProduct } from "./store";
@@ -40,7 +43,7 @@ export function mountProducts(root: HTMLElement, host: ProductsHost): { open: (o
   let abort: AbortController | null = null;
   let options: ModelOptionList | null = null;
   let mode: "guided" | "creator" = "guided";
-  let draft = { topic: "", handle: "", notes: "", consent: false, web: true };
+  let draft = { topic: "", handle: "", notes: "", consent: false, web: true, research: "standard" as "light" | "standard" | "deep" };
   let outlineTab = 0;
   let readTab: "read" | "export" | "store" | "charter" = "read";
   let liveText = "";
@@ -106,6 +109,7 @@ export function mountProducts(root: HTMLElement, host: ProductsHost): { open: (o
   function onProgress(p: Progress): void {
     if (p.phase === "note") workNote = p.label;
     else if (p.phase === "section") { steps.set("manuscript", { label: `Writing · wave ${p.wave} of ${p.waves}`, value: product?.sections.filter((s) => s.status === "done").length ?? 0, total: p.total }); workNote = `${p.words.toLocaleString()} words written`; if (view === "working") paintManuscriptList(); }
+    else if (p.phase === "pages") { steps.set("pages", { label: `Measuring the PDF${p.round ? ` · round ${p.round}` : ""}`, value: p.pages, total: p.target }); workNote = `${p.pages} of ${p.target} pages`; }
     else { steps.set(p.phase, { label: p.label, value: p.done, total: p.total }); workNote = p.label; }
     paintWork();
   }
@@ -203,6 +207,9 @@ export function mountProducts(root: HTMLElement, host: ProductsHost): { open: (o
         el("p", { class: "pb-note", text: "Ultron reads public pages and what you paste. It does not log in to social accounts or collect private data." }));
     }
     c.append(el("label", { class: "pb-check" }, el("input", { type: "checkbox", checked: draft.web, onchange: (e: Event) => { draft.web = (e.target as HTMLInputElement).checked; } }), el("span", { text: "Research the web first (existing books, top pages, public sources)" })));
+    const level = el("select", { class: "pb-input", "aria-label": "Research depth", onchange: (e: Event) => { draft.research = (e.target as HTMLSelectElement).value as typeof draft.research; } }, el("option", { value: "light", text: "Quick scan · about 8 sources, under a minute" }), el("option", { value: "standard", text: "Standard · about 40 sources, a few minutes" }), el("option", { value: "deep", text: "Deep · reads up to 150 sources, best for long books" })) as HTMLSelectElement;
+    level.value = draft.research;
+    c.append(el("label", { class: "pb-label block" }, el("span", { text: "Research depth" }), level));
     c.append(modelStatus(), el("button", { class: "pb-btn big", type: "button", text: "Find my profitable pockets", onclick: () => void start() }));
     if (!ideas.length) return;
     void refreshTrendIdeas(http, makeEnv()).then((fresh) => { if (view === "home" && fresh !== ideas && fresh.join() !== ideas.join() && !draft.topic) show("home"); });
@@ -218,6 +225,19 @@ export function mountProducts(root: HTMLElement, host: ProductsHost): { open: (o
       if (!ready) box.append(el("span", { class: "pb-row" }, el("button", { class: "pb-btn small", type: "button", text: "Add API key", onclick: host.openKeys }), el("button", { class: "pb-btn small ghost", type: "button", text: "Local models", onclick: host.openLocalModels })));
     });
     return box;
+  }
+
+  async function runDeepResearch(p: Product, target: number): Promise<void> {
+    const env = makeEnv();
+    try {
+      const dr = await deepResearch(http, browserParse, p.topic, {
+        target, signal: abort?.signal,
+        condense: (batch, topic) => env.complete([{ role: "system", content: SYSTEM_WRITER }, { role: "user", content: promptCondense(batch, topic) }], { maxTokens: 700, signal: abort?.signal }),
+        onProgress: (e) => { steps.set(e.phase, { label: e.label, value: e.done, total: e.total }); workNote = e.label; paintWork(); },
+      });
+      p.research = { query: dr.query, notes: dr.notes, sources: dr.digests.slice(0, 12).map((d) => ({ title: d.title, url: d.url, snippet: d.digest.slice(0, 140) })), deep: true, digests: dr.digests, attempted: dr.attempted, read: dr.read };
+      await saveProduct(p);
+    } catch (e) { if (e instanceof DOMException && e.name === "AbortError") throw e; /* offline or blocked: continue without research */ }
   }
 
   async function start(): Promise<void> {
@@ -238,8 +258,10 @@ export function mountProducts(root: HTMLElement, host: ProductsHost): { open: (o
         p.creator = { handle: draft.handle.trim(), notes: text.slice(0, 5000), sources, consent: draft.consent };
       }
       if (draft.web) {
-        workNote = "Searching the web"; paintWork();
-        try { p.research = await research(http, p.topic, { signal: abort?.signal }); } catch { /* offline: continue without it */ }
+        if (draft.research === "light") {
+          workNote = "Searching the web"; paintWork();
+          try { p.research = await research(http, p.topic, { signal: abort?.signal }); } catch { /* offline: continue without it */ }
+        } else await runDeepResearch(p, draft.research === "deep" ? 150 : 40);
       }
       await discoverPockets(p, env);
     }, "home");
@@ -293,7 +315,8 @@ export function mountProducts(root: HTMLElement, host: ProductsHost): { open: (o
     c.append(el("h2", { text: "Customise your eBook" }), el("p", { class: "pb-note", text: `Approved: ${p.title}` }),
       select("Book format", Object.entries(BOOK_FORMATS).map(([k, v]) => [k, `${v.label} · ${v.hint}`]), cu.bookFormat, (v) => { cu.bookFormat = v as BookFormat; }),
       select("Depth", Object.entries(DEPTH_SPEC).map(([k, v]) => [k, `${v.label} · ${v.chapters} chapters`]), cu.depth, (v) => { cu.depth = v as Depth; }),
-      select("Illustrations", [["0", "None"], ["2", "2 images"], ["3", "3 images"], ["5", "5 images"]], String(cu.imageCount), (v) => { cu.imageCount = Number(v); }),
+      select("Illustrations", [["0", "None"], ["2", "2 images"], ["3", "3 images"], ["5", "5 images"], ["8", "8 images"]], String(cu.imageCount), (v) => { cu.imageCount = Number(v); }),
+      ...(DEPTH_SPEC[cu.depth].pages && !p.research?.deep ? [el("div", { class: "pb-status" }, el("span", { class: "pb-dot warn" }), el("span", { text: `${DEPTH_SPEC[cu.depth].label} books are stronger after deep research (it grounds each chapter in real sources).` }), el("button", { class: "pb-btn small", type: "button", text: "Run deep research (150 sources)", onclick: () => { void run("Reading sources", "customise", async () => { await runDeepResearch(p, 150); }, "customise"); } }))] : []),
       el("label", { class: "pb-label", text: "Tone" }), tone, el("label", { class: "pb-label", text: "Your notes" }), notes,
       el("div", { class: "pb-sub", text: "Reference material (optional)" }), refs, file, el("button", { class: "pb-btn ghost", type: "button", text: "Add text, Markdown or CSV files", onclick: () => file.click() }),
       el("button", { class: "pb-btn big", type: "button", text: "Build the transformation map", onclick: () => { void run("Building the transformation map", "vtm", async () => { await buildVtm(p, makeEnv()); }, "customise"); } }));
@@ -313,7 +336,7 @@ export function mountProducts(root: HTMLElement, host: ProductsHost): { open: (o
   function drawStructure(c: HTMLElement): void {
     const p = product; const s = p?.summary; if (!p || !s) return show("vtm");
     c.append(el("h2", { text: s.title }), el("p", { class: "pb-statement", text: s.subtitle }), el("p", { class: "pb-note", text: s.about }),
-      el("div", { class: "pb-meta" }, el("span", { text: `${s.wordRange[0].toLocaleString()}–${s.wordRange[1].toLocaleString()} words` }), el("span", { text: `~${s.readingMinutes} min read` }), el("span", { text: DEPTH_SPEC[p.custom.depth].label })),
+      el("div", { class: "pb-meta" }, el("span", { text: `${s.wordRange[0].toLocaleString()}–${s.wordRange[1].toLocaleString()} words` }), el("span", { text: `~${s.readingMinutes} min read` }), el("span", { text: DEPTH_SPEC[p.custom.depth].pages ? `${DEPTH_SPEC[p.custom.depth].pages}+ pages` : DEPTH_SPEC[p.custom.depth].label })),
       el("div", { class: "pb-sub", text: "What readers learn" }), el("ul", { class: "pb-list" }, ...s.learn.map((l) => el("li", { text: l }))),
       el("div", { class: "pb-sub", text: "Frameworks in this book" }), ...s.glossary.map((g) => el("div", { class: "pb-gloss" }, el("strong", { text: g.term }), el("small", { text: g.meaning }))),
       el("div", { class: "pb-sub", text: "Bonus materials" }), el("ul", { class: "pb-list" }, ...s.bonuses.map((b) => el("li", { text: `${b.title} · ${b.kind}` }))),
@@ -338,6 +361,8 @@ export function mountProducts(root: HTMLElement, host: ProductsHost): { open: (o
       workNote = "Designing the branding"; steps.clear(); paintWork();
       await designBranding(p, env);
       if (p.custom.imageCount > 0) { workNote = "Generating illustrations"; paintWork(); await renderImages(p, env); }
+      const pagesTarget = DEPTH_SPEC[p.custom.depth].pages;
+      if (pagesTarget) { workNote = "Measuring the book"; steps.clear(); paintWork(); await expandToTarget(p, { ...env, measurePages: measurePdfPages }, pagesTarget); }
       workNote = "Writing the sales page"; paintWork();
       await buildStore(p, env);
       p.stage = "done"; readTab = "read";
@@ -367,6 +392,9 @@ export function mountProducts(root: HTMLElement, host: ProductsHost): { open: (o
         ...(q.issues.length ? [el("details", { class: "pb-details" }, el("summary", { text: "Editor notes" }), ...q.issues.map((i) => el("small", { class: "pb-src", text: i })))] : []), page);
     } else if (readTab === "export") {
       c.append(el("h2", { text: "Export" }), el("p", { class: "pb-note", text: "Files are saved on this device and appear in your Agent Workspace. Share them to Drive, email or your e-reader." }));
+      const pagesNote = el("p", { class: "pb-note", text: "Measuring the PDF…" });
+      void measurePdfPages(p).then((n) => { pagesNote.textContent = `The PDF is ${n} pages (6×9 in).`; }).catch(() => { pagesNote.textContent = ""; });
+      c.append(pagesNote);
       const status = el("p", { class: "pb-note", role: "status", "aria-live": "polite" });
       for (const f of Object.keys(FORMAT_INFO) as ExportFormat[]) {
         const info = FORMAT_INFO[f];

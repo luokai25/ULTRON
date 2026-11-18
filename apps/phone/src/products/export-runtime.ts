@@ -2,7 +2,7 @@ import { saveLocalArtifact, type LocalArtifactMeta } from "../local-artifacts";
 import { buildHtml, buildMarkdown, fileStem, brandOf, bookTitle, bookSubtitle } from "./book";
 import { buildEpub } from "./epub";
 import { coverPng, coverSvg } from "./cover";
-import { buildPdf } from "./pdf";
+import { buildPdf, buildPdfWithInfo } from "./pdf";
 import type { Product } from "./types";
 import merriweatherBold from "@expo-google-fonts/merriweather/700Bold/Merriweather_700Bold.ttf?url";
 import openSans from "@expo-google-fonts/open-sans/400Regular/OpenSans_400Regular.ttf?url";
@@ -52,4 +52,10 @@ export async function renderExport(p: Product, format: ExportFormat): Promise<Bl
 export async function exportProduct(p: Product, format: ExportFormat): Promise<LocalArtifactMeta> {
   const blob = await renderExport(p, format);
   return saveLocalArtifact({ name: `${fileStem(p)}.${FORMAT_INFO[format].ext}`, blob, mimeType: FORMAT_INFO[format].mime, description: `${bookTitle(p)} (${FORMAT_INFO[format].label})`, metadata: { productId: p.id, kind: "digital-product" } });
+}
+
+/** Real page count of the finished PDF, used to grow books to their target length. */
+export async function measurePdfPages(p: Product): Promise<number> {
+  const [{ jsPDF }, display, body, bodyBold] = await Promise.all([import("jspdf"), fontBase64(merriweatherBold), fontBase64(openSans), fontBase64(openSansBold)]);
+  return buildPdfWithInfo(p, { jsPDF: jsPDF as never, fonts: { display, body, bodyBold } }).pages;
 }

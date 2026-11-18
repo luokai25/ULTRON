@@ -1,4 +1,4 @@
-import { blocksToHtml, blocksToMarkdown, escapeHtml } from "./blocks";
+import { blockText, blocksToHtml, blocksToMarkdown, escapeHtml } from "./blocks";
 import { isSafeCategory } from "./scoring";
 import type { Brand, Product, Section } from "./types";
 
@@ -7,6 +7,16 @@ import type { Brand, Product, Section } from "./types";
 export const DEFAULT_BRAND: Brand = { page: "#f6f1e9", type: "#2b2a27", accent: "#b5532f", tint: "#ead9c5", muted: "#6b6760", displayFont: "Merriweather", bodyFont: "Open Sans", style: "editorial, serif rules, flat", mood: "calm", coverPrompt: "" };
 
 export const brandOf = (p: Product): Brand => p.brand ?? DEFAULT_BRAND;
+
+/** Sources the book actually leans on: those cited as [n] in the text, or the strongest ones read when the writer cited few. */
+export function usedSources(p: Product): Array<{ n: number; title: string; url: string }> {
+  const ds = p.research?.digests ?? [];
+  if (!ds.length) return [];
+  const text = p.sections.filter((s) => s.status === "done").flatMap((s) => s.blocks.map(blockText)).join(" ");
+  const cited = new Set([...text.matchAll(/\[(\d{1,3})\]/g)].map((m) => Number(m[1])));
+  const list = ds.filter((d) => cited.has(d.n));
+  return (list.length >= 5 ? list : ds.slice(0, 30)).map((d) => ({ n: d.n, title: d.title, url: d.url })).sort((a, b) => a.n - b.n);
+}
 
 export function sectionLabel(p: Product, s: Section): string {
   if (s.kind === "intro") return "INTRODUCTION";
@@ -70,11 +80,18 @@ export function buildHtml(p: Product): string {
 ${dis ? `<p class="fine">${escapeHtml(dis)}</p>` : ""}
 <nav><h2>Contents</h2><ol>${toc}</ol></nav>
 ${p.sections.filter((s) => s.status === "done").map((s) => `<section id="${s.id}">${sectionBodyHtml(p, s)}</section>`).join("\n")}
+${sourcesHtml(p)}
 </body></html>`;
+}
+
+export function sourcesHtml(p: Product): string {
+  const src = usedSources(p);
+  return src.length ? `<section id="sources"><p class="label">SOURCES</p><h1>Sources and further reading</h1><hr class="rule"/><ol class="sources">${src.map((x) => `<li value="${x.n}"><strong>${escapeHtml(x.title)}</strong><br/><span class="fine">${escapeHtml(x.url)}</span></li>`).join("")}</ol></section>` : "";
 }
 
 export function buildMarkdown(p: Product): string {
   const dis = disclaimerOf(p);
   return [`# ${bookTitle(p)}`, bookSubtitle(p) ? `*${bookSubtitle(p)}*` : "", dis ? `> ${dis}` : "", "## Contents", p.sections.filter((s) => s.status === "done").map((s, i) => `${i + 1}. ${s.title}`).join("\n"),
-    ...p.sections.filter((s) => s.status === "done").map((s) => `\n---\n\n*${sectionLabel(p, s)}*\n\n## ${s.title}\n\n${blocksToMarkdown(s.blocks)}`)].filter(Boolean).join("\n\n");
+    ...p.sections.filter((s) => s.status === "done").map((s) => `\n---\n\n*${sectionLabel(p, s)}*\n\n## ${s.title}\n\n${blocksToMarkdown(s.blocks)}`),
+    usedSources(p).length ? `\n---\n\n## Sources and further reading\n\n${usedSources(p).map((x) => `[${x.n}] ${x.title} — ${x.url}`).join("\n")}` : ""].filter(Boolean).join("\n\n");
 }

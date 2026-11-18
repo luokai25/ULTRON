@@ -2,7 +2,7 @@
 
 export type ProductMode = "guided" | "creator";
 export type BookFormat = "standard" | "cookbook" | "stepbystep";
-export type Depth = "quick" | "complete" | "deep";
+export type Depth = "quick" | "complete" | "deep" | "book45" | "book50";
 
 export type Direction = { id: string; title: string; category: string };
 
@@ -106,7 +106,7 @@ export type Product = {
   mode: ProductMode;
   topic: string;
   creator?: { handle: string; notes: string; sources: Array<{ title: string; url: string }>; consent: boolean };
-  research?: { query: string; notes: string; sources: Array<{ title: string; url: string; snippet: string }> };
+  research?: { query: string; notes: string; sources: Array<{ title: string; url: string; snippet: string }>; deep?: boolean; digests?: Array<{ n: number; title: string; url: string; digest: string; score: number }>; attempted?: number; read?: number };
   directions: Direction[];
   pockets: Pocket[];
   pocket?: Pocket;
@@ -136,11 +136,20 @@ export const DEFAULT_CUSTOM: Customisation = {
   references: [],
 };
 
-export const DEPTH_SPEC: Record<Depth, { label: string; chapters: number; words: [number, number]; hint: string }> = {
-  quick: { label: "Quick Guide", chapters: 5, words: [350, 600], hint: "The essentials, fast." },
-  complete: { label: "Complete Guide", chapters: 7, words: [550, 900], hint: "The full picture, with examples for every key point." },
-  deep: { label: "Deep Dive", chapters: 9, words: [800, 1300], hint: "Everything, in depth." },
+/** `pages` is the PDF length the book is measured and expanded to; `parts` is how many model calls write each chapter. */
+export const DEPTH_SPEC: Record<Depth, { label: string; chapters: number; words: [number, number]; hint: string; parts: 1 | 2; pages?: number; bonuses: number }> = {
+  quick: { label: "Quick Guide", chapters: 5, words: [350, 600], hint: "About 15 pages. The essentials, fast.", parts: 1, bonuses: 1 },
+  complete: { label: "Complete Guide", chapters: 7, words: [550, 900], hint: "About 30 pages. The full picture.", parts: 1, bonuses: 2 },
+  deep: { label: "Deep Dive", chapters: 9, words: [800, 1300], hint: "About 40 pages. Everything, in depth.", parts: 2, bonuses: 2 },
+  book45: { label: "Long Book", chapters: 12, words: [800, 1100], hint: "45 pages, measured in the finished PDF.", parts: 2, pages: 45, bonuses: 2 },
+  book50: { label: "Full Book", chapters: 14, words: [850, 1200], hint: "50+ pages, measured in the finished PDF.", parts: 2, pages: 50, bonuses: 3 },
 };
+
+/** Words per PDF page and the page overhead, measured against the real 6 x 9 in layout (front matter 3 pages, ~0.35 page lost per section start). */
+export const WORDS_PER_PAGE = 270;
+export function estimatePages(sections: Array<{ words: number; status: string }>, sourcePages = 0): number {
+  return 3 + sections.filter((s) => s.status === "done").reduce((n, s) => n + Math.ceil(0.35 + s.words / WORDS_PER_PAGE), 0) + sourcePages;
+}
 
 export const BOOK_FORMATS: Record<BookFormat, { label: string; hint: string; rule: string }> = {
   standard: { label: "Standard Book", hint: "Chapters of prose with images.", rule: "Each chapter teaches one idea in prose, with examples, a callout and a short exercise." },

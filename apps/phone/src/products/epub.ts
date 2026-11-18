@@ -1,5 +1,5 @@
 import { escapeHtml } from "./blocks";
-import { bookCss, bookSubtitle, bookTitle, brandOf, disclaimerOf, imageLookup, sectionBodyHtml } from "./book";
+import { bookCss, bookSubtitle, bookTitle, brandOf, disclaimerOf, imageLookup, sectionBodyHtml, sourcesHtml, usedSources } from "./book";
 import { coverSvg } from "./cover";
 import type { Product } from "./types";
 
@@ -55,6 +55,7 @@ export function buildEpub(p: Product, zip: ZipDeps, coverPngBytes?: Uint8Array |
     return { id: `c${i + 1}`, href: `chapter${i + 1}.xhtml`, title: s.title, html };
   });
   void look;
+  if (usedSources(p).length) chapterFiles.push({ id: `c${chapterFiles.length + 1}`, href: `chapter${chapterFiles.length + 1}.xhtml`, title: "Sources and further reading", html: sourcesHtml(p).replace(/^<section id="sources">|<\/section>$/g, "") });
 
   const cover = coverPngBytes ?? null;
   if (cover) files["OEBPS/images/cover.png"] = cover; else put("OEBPS/images/cover.svg", coverSvg(title, bookSubtitle(p), brand));
