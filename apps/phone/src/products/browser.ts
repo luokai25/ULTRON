@@ -4,11 +4,13 @@
  * public pages. Nothing is logged in to, no cookies are sent, and private network addresses are refused.
  */
 
-export type HttpResult = { status: number; url: string; text: string; contentType: string };
+export type HttpResult = { status: number; url: string; text: string; contentType: string; /** Lower-cased response headers, when the transport exposes them. */ headers?: Record<string, string> };
 export type HttpBytes = { status: number; mime: string; base64: string };
 export type Http = {
   get(url: string, options?: { headers?: Record<string, string>; timeoutMs?: number }): Promise<HttpResult>;
   bytes(url: string, options?: { timeoutMs?: number }): Promise<HttpBytes>;
+  /** Any method with a body (used by learned site APIs). Optional so tests and simple transports can omit it. */
+  request?(method: string, url: string, options?: { headers?: Record<string, string>; body?: string; timeoutMs?: number }): Promise<HttpResult>;
 };
 
 export type SearchHit = { title: string; url: string; snippet: string; source: "web" | "wikipedia" | "books" };

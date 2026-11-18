@@ -43,6 +43,15 @@ import { nativeSecureStorage } from "./native-secure-storage";
 import { ARTIFACT_URL_PREFIX, deleteLocalArtifact, listLocalArtifacts, localArtifactUrl, saveLocalArtifact, type LocalArtifactMeta } from "./local-artifacts";
 import { deleteDurableRecord, listDurableRecords, putDurableRecord, putDurableRecords, type DurableBucket } from "./durable-store";
 import { detectProductIntent } from "./products/intent";
+import { createHttp } from "./products/http";
+import { createCompleter } from "./products/models";
+import { browserParse } from "./web/page";
+import { nativeRenderer } from "./web/render";
+import { ComposioManager, type SecretStore } from "./connectors/composio";
+import { askApproval } from "./connectors/approval-ui";
+import { gatherToolContext, sourcesFooter, type ToolContext } from "./connectors/chat-tools";
+import { loopContext, runToolLoop } from "./connectors/agent-loop";
+import { mountConnectorSettings } from "./connectors/settings-ui";
 import type { LocalRoute as ProductsLocalRoute } from "./products/models";
 
 /* ------------------------------------------------------------------ *
@@ -2596,14 +2605,14 @@ async function submitTurn(raw: string): Promise<void> {
   const turnAttachments = pendingAttachments.slice();
   const attachmentContext = turnAttachments.filter((item) => item.text)
     .map((item) => `\n\n[Attached file: ${item.name}]\n${item.text}`).join("");
-  const requestText = text + attachmentContext;
-  const nativeRequestText = requestText + turnAttachments.filter((item) => !item.text)
+  let requestText = text + attachmentContext;
+  let nativeRequestText = requestText + turnAttachments.filter((item) => !item.text)
     .map((item) => item.dataUrl
       ? "\n\n[Image attached: " + item.name + (selectedNativeProjectorName ? ". The image is included for visual analysis." : ". Import a compatible mmproj projector to enable local image understanding.") + "]"
       : "\n\n[" + (item.type === "application/pdf" ? "PDF" : "File") + " attached: " + item.name + ". This file type was not extracted for on-device inference.]").join("");
-  const remoteRequestText = (requestText + turnAttachments.filter((item) => !item.text && !item.dataUrl)
+  let remoteRequestText = (requestText + turnAttachments.filter((item) => !item.text && !item.dataUrl)
     .map((item) => `\n\n[${item.type === "application/pdf" ? "PDF" : "File"} attached: ${item.name}. Its contents were not extracted.]`).join("")).slice(0, 16_000);
-  const remoteBackgroundRequestText = (remoteRequestText + turnAttachments.filter((item) => item.dataUrl)
+  let remoteBackgroundRequestText = (remoteRequestText + turnAttachments.filter((item) => item.dataUrl)
     .map((item) => `\n\n[Image attached: ${item.name}. Background task submissions currently accept text only, so the image bytes are not sent in background mode.]`).join("")).slice(0, 16_000);
   const continuation = /\b(continue|carry on|resume|pick up where|keep going|go on)\b|(?:استمر|كمل|تابع)/i.test(text);
   const priorCheckpoint = continuation ? validateUltronCheckpoint(convo.cognitiveCheckpoint, convo.id) : null;
@@ -2685,6 +2694,24 @@ async function submitTurn(raw: string): Promise<void> {
   syncRender();
   setThinking(true);
   renderLiveEvent(reply.body, { type: "thinking", stage: "starting", label: "Working on your request" });
+  let toolContext: ToolContext = { context: "", sources: [], usedWeb: false, usedConnectors: false };
+  try {
+    await composioManager.ensureFresh(300000).catch(() => undefined);
+    toolContext = await gatherToolContext(text, convo.messages.slice(-7, -1).filter((m) => m.role === "user" || m.role === "assistant").map((m) => ({ role: m.role as "user" | "assistant", content: m.content.slice(0, 700) })), {
+      http: toolHttp, parse: browserParse, renderer: webRenderer, composio: composioManager, complete: toolComplete, approve: askApproval, signal: turnController.signal,
+      webEnabled: composioManager.getSettings().webInChat,
+      status: (label) => renderLiveEvent(reply.body, { type: "thinking", stage: "tools", label }),
+    });
+  } catch (error) {
+    if (turnController.signal.aborted) toolContext = { context: "", sources: [], usedWeb: false, usedConnectors: false };
+    else console.error("[ULTRON chat tools]", error);
+  }
+  if (toolContext.context) {
+    requestText += toolContext.context;
+    nativeRequestText += toolContext.context;
+    remoteRequestText = (remoteRequestText + toolContext.context).slice(0, 24_000);
+    remoteBackgroundRequestText = (remoteBackgroundRequestText + toolContext.context).slice(0, 24_000);
+  }
 
   let result: ChatReply;
   if (!cloudBrainActive && nativeModelLoaded && Capacitor.getPlatform() === "android") {
@@ -2867,6 +2894,7 @@ async function submitTurn(raw: string): Promise<void> {
   else if (!result.content || !result.content.trim()) result = { ...result, content: "The selected model returned an empty response. Check that the model is loaded and its endpoint is reachable, then try again." };
   setThinking(false);
 
+  if (toolContext.sources.length && !turnController.signal.aborted && result.content.trim()) result = { ...result, content: result.content + sourcesFooter(toolContext.sources, result.content) };
   const finalProfile = taskProfile;
   const validation = validateUltronDraft(text, result.content, finalProfile);
   for (const issue of validation.issues) {
@@ -4406,18 +4434,38 @@ androidAppSettingsButton.addEventListener("click", () => {
 });
 
 
+// One model route shared by the products tab and the chat tool steps: any connected provider, or the on-device model.
+const sharedLocalRoute: ProductsLocalRoute = {
+  ready: () => Capacitor.getPlatform() === "android" && nativeModelLoaded,
+  label: () => nativeLoadedModelName || "On-device model",
+  generate: async (messages, maxTokens, onToken) => (await generateNativeStreaming(messages, maxTokens, onToken)).content,
+};
+
+// Composio connected apps. The consumer key lives in secure storage; the tool list refreshes on start, resume and a timer.
+const toolHttp = createHttp();
+const composioSecrets: SecretStore = Capacitor.getPlatform() === "android"
+  ? { get: async (k) => (await nativeSecureStorage.get({ key: k })).value, set: async (k, v) => { await nativeSecureStorage.set({ key: k, value: v }); }, remove: async (k) => { await nativeSecureStorage.remove({ key: k }); } }
+  : { get: async (k) => localStorage.getItem("dev:" + k), set: async (k, v) => localStorage.setItem("dev:" + k, v), remove: async (k) => localStorage.removeItem("dev:" + k) };
+const composioManager = new ComposioManager({ http: toolHttp, secrets: composioSecrets, kv: localStorage });
+const toolCompleter = createCompleter({ kind: "auto" }, sharedLocalRoute);
+const toolComplete = (messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, maxTokens: number, signal?: AbortSignal): Promise<string> => toolCompleter.complete(messages, { maxTokens, signal });
+const webRenderer = nativeRenderer();
+async function checkConnectedAppsWithUltron(): Promise<string> {
+  await composioManager.sync("check");
+  if (composioManager.getState().status !== "connected") throw new Error(composioManager.getState().error || "Composio is not connected.");
+  const r = await runToolLoop("Check my active connections for all toolkits and list every connected app with its status (connected, needs sign-in, or not connected). If the tools support it, list all of them, not just a few.", [], composioManager.getState().tools, { complete: toolComplete, execute: (n, a) => composioManager.call(n, a), askBefore: true, approve: askApproval, alwaysAllowed: new Set(composioManager.getSettings().allowedTools) }, 6);
+  return r.final || loopContext(r).replace(/^[\s\S]*?\]\n/, "");
+}
+void composioManager.init().then(() => composioManager.startAutoSync()).catch((error) => console.error("[ULTRON composio]", error));
+mountConnectorSettings(req<HTMLElement>("#connectors-settings"), composioManager, { checkWithUltron: checkConnectedAppsWithUltron, openProducts: () => { closeSheet(); void openProductsTab().catch((error) => { hideFeatureScreens(); console.error("[ULTRON products]", error); }); } });
+
 // AI Digital Products: loaded on first use so the wizard, PDF and EPUB code stay out of the startup bundle.
 type ProductsController = { open: (options?: { topic?: string; autostart?: boolean }) => void; resume: (id: string) => Promise<void> };
 let productsController: Promise<ProductsController> | null = null;
 function productsTab(): Promise<ProductsController> {
   productsController ??= import("./products/ui").then(({ mountProducts }) => {
-    const local: ProductsLocalRoute = {
-      ready: () => Capacitor.getPlatform() === "android" && nativeModelLoaded,
-      label: () => nativeLoadedModelName || "On-device model",
-      generate: async (messages, maxTokens, onToken) => (await generateNativeStreaming(messages, maxTokens, onToken)).content,
-    };
     return mountProducts(req<HTMLElement>("#products-screen"), {
-      local,
+      local: sharedLocalRoute,
       openKeys: () => { showFeatureScreen("llm-api-keys-screen", navChatButton); renderProviderKeyState(); void refreshCloudLlmScreen(); },
       openLocalModels: () => openSheet(),
       onClose: () => { hideFeatureScreens(); setActiveNavigation(navChatButton); },

@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(UltronSecureStoragePlugin.class);
         registerPlugin(UltronProviderHttpPlugin.class);
         registerPlugin(UltronGoogleAuthPlugin.class);
+        registerPlugin(UltronWebRenderPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
