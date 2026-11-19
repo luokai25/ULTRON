@@ -4,8 +4,8 @@ export type { Consent, SaveOutcome } from "./device-save";
 
 /**
  * One place for putting files on the phone. On Android every explicit download or export goes into the public Downloads folder
- * (Files app → Downloads) through the native UltronDownloads plugin. The first time, Ultron asks for the owner's consent; on
- * Android 9 and older the system storage permission is requested as well. Elsewhere (desktop preview) it falls back to a normal
+ * (Files app → Downloads) through the native UltronDownloads plugin (MediaStore, no storage permission declared). The first time, Ultron asks for the
+ * owner's consent. Android 9 and older fall back to the share sheet. Elsewhere (desktop preview) it falls back to a normal
  * browser download. Failure never loses the file: it falls back to the share sheet or a browser download.
  */
 

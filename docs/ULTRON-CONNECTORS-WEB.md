@@ -36,9 +36,9 @@ Android System WebView inside the app (Chrome's engine); it cannot see Chrome's 
 
 ## Files
 
-Every explicit download or export is saved to the phone's Downloads folder through `UltronDownloadsPlugin` (MediaStore on Android 10+, which needs no
-system permission; the legacy storage permission on Android 9 and older). The app asks once for consent, remembered in Settings. It falls back to the
-share sheet or a browser download if saving fails.
+Every explicit download or export is saved to the phone's Downloads folder through `UltronDownloadsPlugin` (MediaStore, which on Android 10+ needs no
+storage permission, so none is declared: the release workflow fails the build on any broad storage permission). The app asks once for consent,
+remembered in Settings. Android 9 and older, or any failed save, falls back to the share sheet or a browser download.
 
 ## Web in normal chat (basics)
 
