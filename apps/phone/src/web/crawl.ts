@@ -41,7 +41,7 @@ export function parseRobots(text: string, agent = "ultron"): Robots {
   };
 }
 
-export type CrawlResult = { url: string; finalUrl: string; status: number; ok: boolean; error?: string; title: string; markdown: string; text: string; links: Array<{ text: string; url: string }>; fetchedAt: number };
+export type CrawlResult = { url: string; finalUrl: string; status: number; ok: boolean; error?: string; title: string; markdown: string; text: string; links: Array<{ text: string; url: string }>; fetchedAt: number; published?: string };
 
 export type CrawlOptions = {
   maxPages: number; concurrency: number; perDomainDelayMs: number; respectRobots: boolean; sameSiteOnly: boolean; follow: boolean;
@@ -106,7 +106,7 @@ export class Crawler {
       if (/json|text\/plain/i.test(res.contentType) && !/<html/i.test(res.text.slice(0, 400))) return { ...base, ok: true, title: url, markdown: res.text.slice(0, this.opts.maxChars), text: res.text.slice(0, this.opts.maxChars) };
       const page = new Page(res.text, base.finalUrl, this.deps.parse);
       const markdown = page.markdown(this.opts.maxChars);
-      return { ...base, ok: markdown.length > 0, title: page.title(), markdown, text: page.text().slice(0, this.opts.maxChars), links: page.links().slice(0, 150), error: markdown ? undefined : "no readable text" };
+      return { ...base, ok: markdown.length > 0, title: page.title(), markdown, text: page.text().slice(0, this.opts.maxChars), links: page.links().slice(0, 150), published: page.published(), error: markdown ? undefined : "no readable text" };
     } catch (error) { return { ...base, error: error instanceof Error ? error.message : "fetch failed" }; }
   }
 

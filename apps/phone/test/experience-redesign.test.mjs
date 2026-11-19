@@ -83,7 +83,7 @@ test("local file requests have a real PDF fallback and artifact card actions", a
   assert.match(main, /portable Markdown version preserves the generated content/);
   assert.match(main, /function localPdfBlob\(/);
   assert.match(main, /async function attachRequestedArtifact\(/);
-  assert.match(main, /URL\.createObjectURL\(blob\)/);
+  assert.match(main, /URL\.createObjectURL\(blob\)|saveToDevice\(blob/, "files are saved from real bytes (into the phone's Downloads folder)");
   assert.match(main, /downloadArtifact\(call\.artifact/);
   assert.match(main, /function artifactPreviewUrl\(/);
   assert.match(main, /baseUrl\(\)\}\$\{url/);

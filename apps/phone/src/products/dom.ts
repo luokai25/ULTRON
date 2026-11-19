@@ -1,3 +1,5 @@
+import { saveToDevice } from "../device-files";
+
 export type Child = Node | string | null | undefined | false;
 type Attr = string | boolean | number | ((event: Event) => void) | undefined | null;
 
@@ -33,9 +35,6 @@ export async function shareBlob(blob: Blob, filename: string): Promise<"shared" 
   try {
     if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) { await navigator.share({ files: [file], title: filename }); return "shared"; }
   } catch (error) { if (error instanceof Error && error.name === "AbortError") return "shared"; }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  await saveToDevice(blob, filename);
   return "downloaded";
 }

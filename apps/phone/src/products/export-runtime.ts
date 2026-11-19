@@ -49,9 +49,10 @@ export async function renderExport(p: Product, format: ExportFormat): Promise<Bl
 }
 
 /** Renders a format and files it with the user's other generated files, so it also shows up in the Agent Workspace. */
-export async function exportProduct(p: Product, format: ExportFormat): Promise<LocalArtifactMeta> {
+export async function exportProduct(p: Product, format: ExportFormat): Promise<{ meta: LocalArtifactMeta; blob: Blob; filename: string }> {
   const blob = await renderExport(p, format);
-  return saveLocalArtifact({ name: `${fileStem(p)}.${FORMAT_INFO[format].ext}`, blob, mimeType: FORMAT_INFO[format].mime, description: `${bookTitle(p)} (${FORMAT_INFO[format].label})`, metadata: { productId: p.id, kind: "digital-product" } });
+  const meta = await saveLocalArtifact({ name: `${fileStem(p)}.${FORMAT_INFO[format].ext}`, blob, mimeType: FORMAT_INFO[format].mime, description: `${bookTitle(p)} (${FORMAT_INFO[format].label})`, metadata: { productId: p.id, kind: "digital-product" } });
+  return { meta, blob, filename: `${fileStem(p)}.${FORMAT_INFO[format].ext}` };
 }
 
 /** Real page count of the finished PDF, used to grow books to their target length. */

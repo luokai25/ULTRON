@@ -178,3 +178,30 @@ test("parser accepts sloppy model output and routing only triggers for app-relat
   for (const yes of ["check my gmail inbox", "what's on my calendar tomorrow", "create a github issue for the login bug", "use composio to list my notion pages", "post this to slack"]) assert.equal(loop.wantsConnectors(yes), true, yes);
   for (const no of ["explain photosynthesis", "write a poem about rain", "what is 12 times 9"]) assert.equal(loop.wantsConnectors(no), false, no);
 });
+
+test("built-in key: connects with no setup, can be turned off and on, and an own key overrides it", async () => {
+  const { s, http } = server({ tools: [tool("COMPOSIO_SEARCH_TOOLS"), tool("GMAIL_FETCH_EMAILS")] });
+  const secrets = memSecrets(); const kv = memKv();
+  const m = new composio.ComposioManager({ http, secrets, kv, builtInKey: KEY });
+  await m.init();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(m.getState().status, "connected", "connected with no key entered");
+  assert.equal(m.getState().keySource, "built-in");
+  assert.equal(m.getState().tools.length, 2);
+  assert.equal(secrets.m.size, 0, "the built-in key is never copied into storage");
+  assert.ok(![...kv.m.values()].some((v) => v.includes(KEY)));
+  await m.disconnect();
+  assert.equal(m.getState().status, "no-key");
+  const again = new composio.ComposioManager({ http, secrets, kv, builtInKey: KEY });
+  await again.init();
+  assert.equal(again.getState().status, "no-key", "turning it off persists across restarts");
+  await again.enableBuiltIn(); await new Promise((r) => setTimeout(r, 20));
+  assert.equal(again.getState().status, "connected");
+  // an owner-provided key takes precedence, and removing it falls back to the built-in one
+  const bad = await again.saveKey("ck_wrongwrongwrong");
+  assert.equal(bad.ok, false);
+  await again.removeKey(); await new Promise((r) => setTimeout(r, 20));
+  assert.equal(again.getState().keySource, "built-in"); assert.equal(again.getState().status, "connected");
+  assert.equal(new composio.ComposioManager({ http, secrets, kv, builtInKey: "garbage" }).hasBuiltIn(), false);
+  void s;
+});

@@ -96,6 +96,8 @@ jobs:
         env:
           # Owner-provided provider keys that ship inside this build; stored as a repository secret, never committed.
           VITE_ULTRON_BUNDLED_KEYS: ${{ secrets.ULTRON_BUNDLED_KEYS }}
+          # Composio consumer key, built into this private APK so connected apps work with no setup. Never committed.
+          VITE_COMPOSIO_CONSUMER_KEY: ${{ secrets.COMPOSIO_CONSUMER_KEY }}
         run: pnpm build
 
       - name: Set up JDK

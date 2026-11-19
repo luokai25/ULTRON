@@ -138,4 +138,11 @@ export function loopContext(r: LoopResult): string {
 }
 
 const TRIGGERS = /\b(gmail|email|e-mail|inbox|mail|calendar|schedule|meeting|event|invite|slack|notion|github|issue|pull request|pr\b|drive|doc|docs|sheet|spreadsheet|trello|asana|jira|linear|hubspot|salesforce|stripe|shopify|twitter|tweet|linkedin|instagram|facebook|discord|telegram|whatsapp|zoom|dropbox|airtable|figma|todoist|clickup|reminder|task|my (?:files|contacts|messages|notes|projects|repos?|orders|customers))\b|\b(use|via|through|with) (?:composio|my connectors?|my apps?|connected apps?)\b|\bcomposio\b/i;
-export const wantsConnectors = (text: string): boolean => TRIGGERS.test(text);
+/** True when the message is about the owner's apps. `appNames` are the apps they actually connected, so even uncommon ones route correctly. */
+export function wantsConnectors(text: string, appNames: string[] = []): boolean {
+  if (TRIGGERS.test(text)) return true;
+  const names = appNames.map((n) => n.toLowerCase()).filter((n) => /^[a-z0-9]{3,24}$/.test(n) && n !== "composio");
+  if (!names.length) return false;
+  const lower = text.toLowerCase();
+  return names.some((n) => new RegExp(`\\b${n}\\b`).test(lower));
+}

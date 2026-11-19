@@ -1,3 +1,4 @@
+import { browserAccess, setBrowserAccess } from "./browser-access";
 import { COMPOSIO_URL, parseConnectionChips, type ComposioManager, type ComposioState } from "./composio";
 
 type H = HTMLElementTagNameMap;
@@ -22,12 +23,12 @@ export type ConnectorSettingsHost = {
 };
 
 /** Settings section: Composio key, live status, what is connected, and the switches that control how chat may use it. */
-export function mountConnectorSettings(root: HTMLElement, manager: ComposioManager, host: ConnectorSettingsHost): void {
+export function mountConnectorSettings(root: HTMLElement, manager: ComposioManager, host: ConnectorSettingsHost, variant: "settings" | "panel" = "settings"): void {
   let showKeyField = false; let busyMsg = "";
   const paint = (s: ComposioState): void => {
     root.replaceChildren();
     const settings = manager.getSettings();
-    const statusText = s.status === "no-key" ? "Not connected. Paste your Composio API key to connect." : s.status === "connecting" ? "Connecting to Composio…" : s.status === "connected" ? `Connected${s.serverName ? " to " + s.serverName : ""} · ${s.tools.length} tool${s.tools.length === 1 ? "" : "s"} · synced ${ago(s.syncedAt)}${s.keyHint ? " · key " + s.keyHint : ""}` : `Problem: ${s.error}`;
+    const statusText = s.status === "no-key" ? (manager.hasBuiltIn() ? "Turned off. Tap “Turn on” to connect automatically." : "Not connected. Paste your Composio API key to connect.") : s.status === "connecting" ? "Connecting to Composio…" : s.status === "connected" ? `Connected${s.serverName ? " to " + s.serverName : ""} · ${s.tools.length} tool${s.tools.length === 1 ? "" : "s"} · synced ${ago(s.syncedAt)}${s.keySource === "built-in" ? " · connected automatically" : s.keyHint ? " · key " + s.keyHint : ""}` : `Problem: ${s.error}`;
     const dot = el("i", { class: `status-dot ${s.status === "connected" ? "ok" : s.status === "error" ? "bad" : "warn"}`, "aria-hidden": "true" });
     dot.style.cssText = `display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;background:${s.status === "connected" ? "#55d6a0" : s.status === "error" ? "#ff6873" : "#f5b44a"}`;
     root.append(
@@ -37,7 +38,7 @@ export function mountConnectorSettings(root: HTMLElement, manager: ComposioManag
     );
     if (s.status !== "connected" && s.error && s.status !== "error") root.append(el("p", { class: "native-model-status", text: s.error }));
     if (s.status === "connected" && s.error) root.append(el("p", { class: "native-model-status", text: `Last refresh failed (${s.error}). Showing what was last known.` }));
-    if (s.status === "no-key" || showKeyField) {
+    if (showKeyField || (s.status === "no-key" && !manager.hasBuiltIn())) {
       const input = el("input", { type: "password", autocomplete: "off", autocapitalize: "off", spellcheck: "false", placeholder: "ck_…", "aria-label": "Composio API key" }) as HTMLInputElement;
       root.append(el("label", { class: "field" }, el("span", { text: "Composio API key" }), input, el("small", { text: `Stored in this device's secure storage and sent only to ${COMPOSIO_URL}. Find it in the Composio dashboard under Install.` })),
         el("div", { class: "sheet-actions" }, el("button", { class: "solid", type: "button", text: "Connect", onclick: async () => { busyMsg = "Connecting…"; const r = await manager.saveKey(input.value); busyMsg = r.ok ? "" : r.error ?? ""; showKeyField = !r.ok; input.value = ""; paint(manager.getState()); } })));
@@ -45,20 +46,23 @@ export function mountConnectorSettings(root: HTMLElement, manager: ComposioManag
       root.append(el("div", { class: "sheet-actions" },
         el("button", { class: "ghost", type: "button", text: "Refresh now", onclick: async () => { busyMsg = "Refreshing…"; paint(manager.getState()); await manager.sync("manual"); await manager.probeConnections(); busyMsg = ""; paint(manager.getState()); } }),
         el("button", { class: "ghost", type: "button", text: "Check apps with Ultron", onclick: async (e) => { const b = e.target as HTMLButtonElement; b.disabled = true; busyMsg = "Ultron is checking your connected apps…"; paint(manager.getState()); try { const text = await host.checkWithUltron(); if (text.trim()) manager.setConnectionsSnapshot(text); busyMsg = text.trim() ? "" : "Ultron could not read your connections."; } catch (err) { busyMsg = err instanceof Error ? err.message : "Check failed."; } paint(manager.getState()); } }),
-        el("button", { class: "ghost", type: "button", text: "Change key", onclick: () => { showKeyField = true; paint(manager.getState()); } }),
-        el("button", { class: "ghost danger", type: "button", text: "Disconnect", onclick: async () => { await manager.removeKey(); showKeyField = false; paint(manager.getState()); } })));
+        el("button", { class: "ghost", type: "button", text: s.keySource === "own" ? "Change key" : "Use my own key", onclick: () => { showKeyField = true; paint(manager.getState()); } }),
+        el("button", { class: "ghost danger", type: "button", text: s.keySource === "built-in" ? "Turn off" : "Disconnect", onclick: async () => { if (s.keySource === "own") await manager.removeKey(); else await manager.disconnect(); showKeyField = false; paint(manager.getState()); } })));
       const chips = s.connections ? parseConnectionChips(s.connections.text) : [];
       if (chips.length) root.append(el("div", { class: "pb-chips", "aria-label": "Connected apps", style: "display:flex;flex-wrap:wrap;gap:6px" }, ...chips.map((c) => { const chip = el("span", { class: "model-library-badge", text: `${c.name} · ${c.status}` }); return chip; })));
       if (s.connections) root.append(el("details", {}, el("summary", { text: `Connections as of ${ago(s.connections.at)}` }), el("pre", { class: "native-model-status", style: "white-space:pre-wrap;overflow-wrap:anywhere;max-height:30vh;overflow:auto;font-size:11px", text: s.connections.text.slice(0, 2500) })));
       else root.append(el("small", { text: "Tap “Check apps with Ultron” to list which apps are connected right now." }));
       if (s.groups.length) root.append(el("details", {}, el("summary", { text: `Tools Ultron can use (${s.tools.length})` }), el("small", { text: s.groups.map((g) => `${g.label} ${g.count}`).join(" · ") })));
     }
+    if (s.status === "no-key" && manager.hasBuiltIn() && !showKeyField) root.append(el("div", { class: "sheet-actions" }, el("button", { class: "solid", type: "button", text: "Turn on", onclick: async () => { await manager.enableBuiltIn(); manager.startAutoSync(); paint(manager.getState()); } }), el("button", { class: "ghost", type: "button", text: "Use my own key", onclick: () => { showKeyField = true; paint(manager.getState()); } })));
     if (busyMsg) root.append(el("p", { class: "native-model-status", role: "status", text: busyMsg }));
+    if (variant === "panel") return;
     const toggle = (label: string, hint: string, checked: boolean, on: (v: boolean) => void): HTMLElement => el("label", { class: "field" }, el("span", { class: "toggle-label" }, el("input", { type: "checkbox", checked, onchange: (e: Event) => on((e.target as HTMLInputElement).checked) }) as unknown as Node, " " + label), el("small", { text: hint }));
     root.append(
       toggle("Let Ultron use my connected apps in chat", "When your message is about email, calendar, files, tasks or another connected app, Ultron looks up and uses the right tool.", settings.enabled, (v) => manager.updateSettings({ enabled: v })),
       toggle("Ask before actions that change things", "Reading is automatic. Sending, posting, creating or deleting always asks first unless you tap “Always allow this”.", settings.askBefore, (v) => manager.updateSettings({ askBefore: v })),
-      toggle("Web search and links in chat", "Ultron reads links you paste and searches the web when a question needs current information, and lists its sources.", settings.webInChat, (v) => manager.updateSettings({ webInChat: v })),
+      toggle("Web search and links in chat", "Ultron reads links you paste and runs a multi-source search when a question needs current information, then answers from what it read and lists its sources.", settings.webInChat, (v) => manager.updateSettings({ webInChat: v })),
+      toggle("Search with this phone's browser engine", "Opens search results and pages in a hidden browser inside the app (the same engine Chrome uses), so JavaScript pages work. It cannot see your Chrome tabs, history or logins. Asked once, then remembered.", browserAccess() === "allowed", (v) => setBrowserAccess(v ? "allowed" : "denied")),
     );
     if (settings.allowedTools.length) root.append(el("div", { class: "sheet-actions" }, el("button", { class: "ghost", type: "button", text: `Reset ${settings.allowedTools.length} always-allowed action${settings.allowedTools.length === 1 ? "" : "s"}`, onclick: () => { manager.updateSettings({ allowedTools: [] }); paint(manager.getState()); } })));
   };
@@ -66,7 +70,7 @@ export function mountConnectorSettings(root: HTMLElement, manager: ComposioManag
   paint(manager.getState());
 
   // AI Digital Products entry, so the tab can be opened from Settings as well as the menu.
-  const products = document.getElementById("products-settings");
+  const products = variant === "settings" ? document.getElementById("products-settings") : null;
   if (products) {
     products.replaceChildren(
       el("span", { text: "AI Digital Products" }),

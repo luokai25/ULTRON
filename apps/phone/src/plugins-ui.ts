@@ -25,7 +25,19 @@ function tile(plugin: PluginDefinition): HTMLElement {
   return node;
 }
 
-export function initPlugins(): void {
+export type PluginsHost = { closeDrawer: () => void };
+
+export function initPlugins(host: PluginsHost): void {
+  // The Tools & Connectors button and the panel's back arrow. (These handlers were lost in the Plugins rebuild, which is why
+  // the screen would not open.)
+  const panel = need<HTMLElement>("#connectors-panel");
+  const openButton = need<HTMLButtonElement>("#connectors-btn");
+  const backButton = need<HTMLButtonElement>("#connectors-back");
+  const openPanel = (): void => { host.closeDrawer(); panel.hidden = false; document.body.dataset.panel = "connectors"; panel.scrollTop = 0; };
+  const closePanel = (): void => { panel.hidden = true; delete document.body.dataset.panel; };
+  openButton.addEventListener("click", openPanel);
+  backButton.addEventListener("click", closePanel);
+
   const list = need<HTMLElement>("#connectors-list");
   const search = need<HTMLInputElement>("#connectors-search");
   const count = need<HTMLElement>("#connectors-count");

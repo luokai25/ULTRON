@@ -14,6 +14,8 @@ export type ToolGroup = { id: string; label: string; count: number };
 export type ComposioState = {
   status: ComposioStatus; error: string; tools: McpTool[]; toolHash: string; groups: ToolGroup[]; syncedAt: number;
   serverName: string; connections: { text: string; at: number; ok: boolean } | null; keyHint: string;
+  /** Where the key in use comes from: one the owner pasted, the one built into this app, or none. */
+  keySource: "own" | "built-in" | "none";
 };
 export type ComposioSettings = { enabled: boolean; askBefore: boolean; allowedTools: string[]; webInChat: boolean };
 
@@ -25,6 +27,7 @@ export type KeyValue = { getItem(k: string): string | null; setItem(k: string, v
 const KEY_NAME = "ultron.composio.consumer-key.v1";
 const CACHE = "ultron.composio.cache.v1";
 const SETTINGS = "ultron.composio.settings.v1";
+const BUILT_IN_OFF = "ultron.composio.built-in-off.v1";
 
 export const validKey = (k: string): boolean => /^ck_[A-Za-z0-9_-]{8,}$/.test(k.trim());
 export const maskKey = (k: string): string => (k.length > 8 ? `${k.slice(0, 3)}…${k.slice(-4)}` : "ck_…");
@@ -51,11 +54,22 @@ export function guessListArgs(tool: McpTool): Array<Record<string, unknown>> {
 }
 
 export class ComposioManager {
-  private state: ComposioState = { status: "no-key", error: "", tools: [], toolHash: "", groups: [], syncedAt: 0, serverName: "", connections: null, keyHint: "" };
+  private state: ComposioState = { status: "no-key", error: "", tools: [], toolHash: "", groups: [], syncedAt: 0, serverName: "", connections: null, keyHint: "", keySource: "none" };
   private listeners = new Set<(s: ComposioState, change: "status" | "tools" | "connections") => void>();
   private client: McpClient | null = null; private timer: ReturnType<typeof setInterval> | null = null; private syncing: Promise<void> | null = null; private settings: ComposioSettings = { ...DEFAULT_SETTINGS };
 
-  constructor(private readonly deps: { http: Http; secrets: SecretStore; kv: KeyValue; now?: () => number; url?: string }) {}
+  constructor(private readonly deps: { http: Http; secrets: SecretStore; kv: KeyValue; now?: () => number; url?: string; builtInKey?: string }) {}
+
+  /** The key to use: the owner's own if they pasted one, otherwise the one built into this app (unless they turned it off). */
+  private async resolveKey(): Promise<{ key: string; source: "own" | "built-in" } | null> {
+    const own = await this.deps.secrets.get(KEY_NAME).catch(() => null);
+    if (own) return { key: own, source: "own" };
+    const built = (this.deps.builtInKey ?? "").trim();
+    if (built && validKey(built) && this.deps.kv.getItem(BUILT_IN_OFF) !== "1") return { key: built, source: "built-in" };
+    return null;
+  }
+  hasBuiltIn(): boolean { return validKey((this.deps.builtInKey ?? "").trim()); }
+  builtInEnabled(): boolean { return this.hasBuiltIn() && this.deps.kv.getItem(BUILT_IN_OFF) !== "1"; }
   private now(): number { return (this.deps.now ?? Date.now)(); }
 
   getState(): ComposioState { return this.state; }
@@ -69,10 +83,10 @@ export class ComposioManager {
   /** Loads the saved key and last known tools, then syncs in the background. */
   async init(): Promise<void> {
     try { const s = JSON.parse(this.deps.kv.getItem(SETTINGS) ?? "null") as Partial<ComposioSettings> | null; if (s) this.settings = { ...DEFAULT_SETTINGS, ...s, allowedTools: Array.isArray(s.allowedTools) ? s.allowedTools : [] }; } catch { /* defaults */ }
-    const key = await this.deps.secrets.get(KEY_NAME).catch(() => null);
-    if (!key) { this.set({ status: "no-key" }); return; }
+    const resolved = await this.resolveKey();
+    if (!resolved) { this.set({ status: "no-key", keySource: "none" }); return; }
     try { const c = JSON.parse(this.deps.kv.getItem(CACHE) ?? "null") as { tools: McpTool[]; at: number; serverName?: string; connections?: ComposioState["connections"] } | null; if (c?.tools?.length) this.state = { ...this.state, tools: c.tools, toolHash: hashTools(c.tools), groups: groupTools(c.tools), syncedAt: c.at, serverName: c.serverName ?? "", connections: c.connections ?? null }; } catch { /* no cache */ }
-    this.state = { ...this.state, status: this.state.tools.length ? "connected" : "connecting", keyHint: maskKey(key) };
+    this.state = { ...this.state, status: this.state.tools.length ? "connected" : "connecting", keyHint: resolved.source === "built-in" ? "built in" : maskKey(resolved.key), keySource: resolved.source };
     this.emit("status");
     void this.sync("start");
   }
@@ -81,23 +95,38 @@ export class ComposioManager {
     const key = raw.trim();
     if (!validKey(key)) return { ok: false, error: "That does not look like a Composio key. It should start with ck_." };
     await this.deps.secrets.set(KEY_NAME, key);
-    this.client = null; this.state = { ...this.state, keyHint: maskKey(key), status: "connecting", error: "" }; this.emit("status");
+    this.client = null; this.state = { ...this.state, keyHint: maskKey(key), keySource: "own", status: "connecting", error: "" }; this.emit("status");
     await this.sync("key");
     return this.state.status === "connected" ? { ok: true } : { ok: false, error: this.state.error || "Could not connect." };
   }
 
+  /** Removes the owner's own key. If the app has a built-in key it takes over again; otherwise Composio is disconnected. */
   async removeKey(): Promise<void> {
     await this.deps.secrets.remove(KEY_NAME).catch(() => undefined);
+    this.client = null;
+    if (this.builtInEnabled()) { this.state = { ...this.state, status: "connecting", error: "", keySource: "built-in", keyHint: "built in" }; this.emit("status"); await this.sync("key"); return; }
+    await this.clearAll();
+  }
+
+  /** Turns the built-in connection off (and removes any cached data). `enableBuiltIn` turns it back on. */
+  async disconnect(): Promise<void> {
+    await this.deps.secrets.remove(KEY_NAME).catch(() => undefined);
+    if (this.hasBuiltIn()) { try { this.deps.kv.setItem(BUILT_IN_OFF, "1"); } catch { /* ignore */ } }
+    await this.clearAll();
+  }
+  async enableBuiltIn(): Promise<void> { try { this.deps.kv.removeItem(BUILT_IN_OFF); } catch { /* ignore */ } await this.init(); }
+
+  private async clearAll(): Promise<void> {
     try { this.deps.kv.removeItem(CACHE); } catch { /* ignore */ }
     this.client = null; this.stopAutoSync();
-    this.state = { status: "no-key", error: "", tools: [], toolHash: "", groups: [], syncedAt: 0, serverName: "", connections: null, keyHint: "" }; this.emit("status");
+    this.state = { status: "no-key", error: "", tools: [], toolHash: "", groups: [], syncedAt: 0, serverName: "", connections: null, keyHint: "", keySource: "none" }; this.emit("status");
   }
 
   private async getClient(): Promise<McpClient | null> {
     if (this.client) return this.client;
-    const key = await this.deps.secrets.get(KEY_NAME).catch(() => null);
-    if (!key) return null;
-    this.client = new McpClient({ url: this.deps.url ?? COMPOSIO_URL, headers: { "x-consumer-api-key": key }, http: this.deps.http, clientName: "ultron" });
+    const resolved = await this.resolveKey();
+    if (!resolved) return null;
+    this.client = new McpClient({ url: this.deps.url ?? COMPOSIO_URL, headers: { "x-consumer-api-key": resolved.key }, http: this.deps.http, clientName: "ultron" });
     return this.client;
   }
 

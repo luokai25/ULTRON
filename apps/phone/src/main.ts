@@ -43,6 +43,7 @@ import { nativeSecureStorage } from "./native-secure-storage";
 import { ARTIFACT_URL_PREFIX, deleteLocalArtifact, listLocalArtifacts, localArtifactUrl, saveLocalArtifact, type LocalArtifactMeta } from "./local-artifacts";
 import { deleteDurableRecord, listDurableRecords, putDurableRecord, putDurableRecords, type DurableBucket } from "./durable-store";
 import { detectProductIntent } from "./products/intent";
+import { mountDownloadsSettings, saveToDevice, toast } from "./device-files";
 import { createHttp } from "./products/http";
 import { createCompleter } from "./products/models";
 import { browserParse } from "./web/page";
@@ -52,6 +53,8 @@ import { askApproval } from "./connectors/approval-ui";
 import { gatherToolContext, sourcesFooter, type ToolContext } from "./connectors/chat-tools";
 import { loopContext, runToolLoop } from "./connectors/agent-loop";
 import { mountConnectorSettings } from "./connectors/settings-ui";
+import { buildToolAwareness } from "./connectors/awareness";
+import { askBrowserAccess, browserAccess } from "./connectors/browser-access";
 import type { LocalRoute as ProductsLocalRoute } from "./products/models";
 
 /* ------------------------------------------------------------------ *
@@ -315,7 +318,7 @@ function buildCapabilityPrompt(task: string, provider: string, executionLedger?:
   const learningContext = buildLearningContext(learningLedger);
   const distilledSkillsContext = buildDistilledSkillContext(task, skillStore);
   const ledgerPrompt = ledger ? buildUltronLedgerPrompt(ledger) : "";
-  return [resolveIdentityPrompt(identityState), core, PROMETHEUS_GOAL_LOOP_PROMPT, expressiveIdentity, selfModel, brain, cognition, calibrationContext, goalPrompt, ledgerPrompt, buildUltronCheckpointPrompt(checkpoint ?? null), buildKnowledgePrompt(active()?.knowledgeState ?? null), memoryContext, learningContext, distilledSkillsContext].filter(Boolean).join("\n\n");
+  return [resolveIdentityPrompt(identityState), core, buildToolAwareness({ state: composioManager.getState(), settings: composioManager.getSettings(), browserAccess: webRenderer ? browserAccess() : "none", products: true }), PROMETHEUS_GOAL_LOOP_PROMPT, expressiveIdentity, selfModel, brain, cognition, calibrationContext, goalPrompt, ledgerPrompt, buildUltronCheckpointPrompt(checkpoint ?? null), buildKnowledgePrompt(active()?.knowledgeState ?? null), memoryContext, learningContext, distilledSkillsContext].filter(Boolean).join("\n\n");
 }
 
 function reportLocalStorageFailure(action: "read" | "save", key: string, error: unknown): void {
@@ -1120,7 +1123,17 @@ async function resolveArtifactUrl(url: string, _inline = false): Promise<string>
 async function downloadArtifact(url: string, filename: string): Promise<void> {
   try {
     const resolved = await resolveArtifactUrl(url, false);
-    if (resolved.startsWith("blob:")) { const anchor = document.createElement("a"); anchor.href = resolved; anchor.download = filename; anchor.click(); return; }
+    try {
+      // Save the real bytes into the phone's Downloads folder (asks for consent the first time).
+      const response = await fetch(resolved);
+      if (!response.ok) throw new Error("File download failed");
+      const blob = await response.blob();
+      const result = await saveToDevice(blob, filename);
+      workspaceNotice(result.message); toast(result.message);
+      return;
+    } catch (inner) {
+      if (resolved.startsWith("blob:")) throw inner;
+    }
     await Browser.open({ url: resolved });
   } catch (error) { workspaceNotice("Artifact download failed: " + (error instanceof Error ? error.message : "unknown error")); }
 }
@@ -1431,6 +1444,12 @@ function pushWorkspaceArtifact(artifact: ArtifactCard): void {
       downloadArtifact(artifact.download_url || artifact.preview_url, filename);
     }
   });
+  const save = document.createElement("button");
+  save.type = "button";
+  save.className = "workspace-tray-share";
+  save.textContent = "Download";
+  save.setAttribute("aria-label", "Download " + artifact.title + " to your phone");
+  save.addEventListener("click", () => { void downloadArtifact(artifact.download_url || artifact.preview_url, artifact.title + "." + artifact.format.toLowerCase()); });
   const dismiss = document.createElement("button");
   dismiss.type = "button";
   dismiss.className = "workspace-tray-dismiss";
@@ -1442,7 +1461,7 @@ function pushWorkspaceArtifact(artifact: ArtifactCard): void {
     count.textContent = remaining + (remaining === 1 ? " item" : " items");
     tray.hidden = remaining === 0;
   });
-  item.append(type, copy, share, dismiss);
+  item.append(type, copy, share, save, dismiss);
   items.prepend(item);
   while (items.children.length > 4) items.lastElementChild?.remove();
   const total = items.children.length;
@@ -2699,7 +2718,7 @@ async function submitTurn(raw: string): Promise<void> {
     await composioManager.ensureFresh(300000).catch(() => undefined);
     toolContext = await gatherToolContext(text, convo.messages.slice(-7, -1).filter((m) => m.role === "user" || m.role === "assistant").map((m) => ({ role: m.role as "user" | "assistant", content: m.content.slice(0, 700) })), {
       http: toolHttp, parse: browserParse, renderer: webRenderer, composio: composioManager, complete: toolComplete, approve: askApproval, signal: turnController.signal,
-      webEnabled: composioManager.getSettings().webInChat,
+      webEnabled: composioManager.getSettings().webInChat, browserAccess, askBrowserAccess,
       status: (label) => renderLiveEvent(reply.body, { type: "thinking", stage: "tools", label }),
     });
   } catch (error) {
@@ -3996,7 +4015,7 @@ async function organiseSemanticMemory(convo:Conversation):Promise<void>{
 }
 function rebuildMindMap():void{mindMap=buildMindMap(store.conversations,semanticGraph);writeJson(MINDMAP_KEY,mindMap);renderMindMap(req<SVGSVGElement>("#mindmap-canvas"),mindMap,showMindNode,req<HTMLInputElement>("#mindmap-search").value);const empty=store.conversations.length===0;req<HTMLElement>("#mindmap-empty").hidden=!empty;req<HTMLElement>(".mindmap-canvas-wrap").classList.toggle("is-empty",empty);req<HTMLElement>("#mindmap-stats").textContent=`${store.conversations.length} sessions · ${store.conversations.reduce((n,c)=>n+c.messages.length,0)} messages · ${mindMap.nodes.length-1} knowledge nodes · ${mindMap.edges?.length??0} relationships`;req<HTMLElement>("#mindmap-organizer").textContent=`Local index · ${nativeLoadedModelName||"automatic organiser"} · ${new Date(mindMap.updatedAt).toLocaleTimeString()}`;}
 function showMindNode(node:MindNode):void{const detail=req<HTMLElement>("#mindmap-detail");detail.replaceChildren();const title=document.createElement("strong");title.textContent=node.label;const meta=document.createElement("small");meta.textContent=`${node.kind} · ${node.conversationIds.length} linked sessions · ${node.count} references`;const body=document.createElement("p");body.textContent=node.examples.slice(0,3).join(" · ");const open=document.createElement("button");open.className="ghost";open.type="button";open.textContent="Open linked conversation";open.disabled=!node.conversationIds.length;open.addEventListener("click",()=>{const c=store.conversations.find(x=>x.id===node.conversationIds[0]);if(c){store.activeId=c.id;saveStore();renderConversation();showFeatureScreen("chat-screen",navChatButton);}});detail.append(title,meta,body,open);}
-function exportObsidianVault():void{const map=mindMap.nodes.length?mindMap:buildMindMap(store.conversations,semanticGraph);const blob=new Blob([exportObsidianMarkdown(store.conversations,map)],{type:"text/markdown;charset=utf-8"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="Ultron-Knowledge-Vault.md";a.click();URL.revokeObjectURL(url);}
+function exportObsidianVault():void{const map=mindMap.nodes.length?mindMap:buildMindMap(store.conversations,semanticGraph);const blob=new Blob([exportObsidianMarkdown(store.conversations,map)],{type:"text/markdown;charset=utf-8"});void saveToDevice(blob,"Ultron-Knowledge-Vault.md").then((r)=>toast(r.message));}
 
 /* ------------------------------------------------------------------ *
  * Wiring
@@ -4446,7 +4465,8 @@ const toolHttp = createHttp();
 const composioSecrets: SecretStore = Capacitor.getPlatform() === "android"
   ? { get: async (k) => (await nativeSecureStorage.get({ key: k })).value, set: async (k, v) => { await nativeSecureStorage.set({ key: k, value: v }); }, remove: async (k) => { await nativeSecureStorage.remove({ key: k }); } }
   : { get: async (k) => localStorage.getItem("dev:" + k), set: async (k, v) => localStorage.setItem("dev:" + k, v), remove: async (k) => localStorage.removeItem("dev:" + k) };
-const composioManager = new ComposioManager({ http: toolHttp, secrets: composioSecrets, kv: localStorage });
+// The built-in key comes from the build (a GitHub Actions secret, like the bundled provider keys). It is never committed to the repo.
+const composioManager = new ComposioManager({ http: toolHttp, secrets: composioSecrets, kv: localStorage, builtInKey: typeof import.meta.env.VITE_COMPOSIO_CONSUMER_KEY === "string" ? import.meta.env.VITE_COMPOSIO_CONSUMER_KEY : "" });
 const toolCompleter = createCompleter({ kind: "auto" }, sharedLocalRoute);
 const toolComplete = (messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, maxTokens: number, signal?: AbortSignal): Promise<string> => toolCompleter.complete(messages, { maxTokens, signal });
 const webRenderer = nativeRenderer();
@@ -4457,7 +4477,10 @@ async function checkConnectedAppsWithUltron(): Promise<string> {
   return r.final || loopContext(r).replace(/^[\s\S]*?\]\n/, "");
 }
 void composioManager.init().then(() => composioManager.startAutoSync()).catch((error) => console.error("[ULTRON composio]", error));
-mountConnectorSettings(req<HTMLElement>("#connectors-settings"), composioManager, { checkWithUltron: checkConnectedAppsWithUltron, openProducts: () => { closeSheet(); void openProductsTab().catch((error) => { hideFeatureScreens(); console.error("[ULTRON products]", error); }); } });
+mountDownloadsSettings(req<HTMLElement>("#downloads-settings"));
+const connectorHost = { checkWithUltron: checkConnectedAppsWithUltron, openProducts: () => { closeSheet(); void openProductsTab().catch((error) => { hideFeatureScreens(); console.error("[ULTRON products]", error); }); } };
+mountConnectorSettings(req<HTMLElement>("#connectors-settings"), composioManager, connectorHost);
+mountConnectorSettings(req<HTMLElement>("#composio-panel-card"), composioManager, connectorHost, "panel");
 
 // AI Digital Products: loaded on first use so the wizard, PDF and EPUB code stay out of the startup bundle.
 type ProductsController = { open: (options?: { topic?: string; autostart?: boolean }) => void; resume: (id: string) => Promise<void> };
@@ -4527,6 +4550,36 @@ nativeProjectorSelect.addEventListener("change", () => {
     : "Text-only mode selected. Image attachments require a compatible mmproj projector.";
 });
 nativeModelUnloadButton.addEventListener("click", () => void unloadNativeModel());
+
+// Local model controls on the LLM API KEYS screen. They drive the same controls as Settings and mirror their state.
+{
+  const llmLocalSelect = req<HTMLSelectElement>("#llm-local-select");
+  const llmLocalStatus = req<HTMLElement>("#llm-local-status");
+  const llmLocalState = req<HTMLElement>("#llm-local-state");
+  const llmLocalImport = req<HTMLButtonElement>("#llm-local-import");
+  const llmLocalLoad = req<HTMLButtonElement>("#llm-local-load");
+  const llmLocalUnload = req<HTMLButtonElement>("#llm-local-unload");
+  const syncLocalCard = (): void => {
+    llmLocalSelect.replaceChildren(...Array.from(nativeModelSelect.options).map((o) => { const c = document.createElement("option"); c.value = o.value; c.textContent = o.textContent; return c; }));
+    llmLocalSelect.value = nativeModelSelect.value;
+    llmLocalSelect.disabled = nativeModelSelect.options.length === 0;
+    llmLocalLoad.disabled = nativeModelLoadButton.disabled;
+    llmLocalUnload.disabled = nativeModelUnloadButton.disabled;
+    llmLocalState.textContent = !nativeModelUnloadButton.disabled ? "Loaded" : nativeModelSelect.options.length ? "Ready to load" : "None imported";
+    const text = (nativeModelStatus.textContent ?? "").trim();
+    llmLocalStatus.textContent = Capacitor.getPlatform() !== "android" ? "Local models run in the Android app." : text || "Import a .gguf model file to chat and build books offline.";
+  };
+  llmLocalImport.addEventListener("click", () => { void importNativeModel().finally(syncLocalCard); });
+  llmLocalLoad.addEventListener("click", () => { void loadNativeModel().finally(syncLocalCard); });
+  llmLocalUnload.addEventListener("click", () => { void unloadNativeModel().finally(syncLocalCard); });
+  llmLocalSelect.addEventListener("change", () => { nativeModelSelect.value = llmLocalSelect.value; nativeModelSelect.dispatchEvent(new Event("change")); syncLocalCard(); });
+  const observer = new MutationObserver(syncLocalCard);
+  observer.observe(nativeModelSelect, { childList: true, attributes: true, subtree: true });
+  observer.observe(nativeModelStatus, { childList: true, characterData: true, subtree: true });
+  observer.observe(nativeModelLoadButton, { attributes: true });
+  observer.observe(nativeModelUnloadButton, { attributes: true });
+  syncLocalCard();
+}
 nativeModelDeleteButton.addEventListener("click", () => void deleteNativeModel());
 nativeModelBenchmarkButton.addEventListener("click", () => void runNativeModelBenchmark());
 nativeModelSelect.addEventListener("change", () => {
@@ -4638,7 +4691,7 @@ if (synth) {
  * ------------------------------------------------------------------ */
 
 
-initPlugins();
+initPlugins({ closeDrawer });
 void seedBundledKeys().then((seeded) => { if (seeded.added > 0) void refreshCloudLlmScreen(); }).catch(() => undefined);
 buildThemes();
 applyTheme(settings.theme);

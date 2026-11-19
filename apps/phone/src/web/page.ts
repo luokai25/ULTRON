@@ -94,6 +94,17 @@ export class Page {
     return match ? { elements: [match.element as unknown as Element], relocated: true, score: match.score } : { elements: [], relocated: false };
   }
 
+  /** Publication or update date of the page when it declares one (meta tags, <time>, JSON-LD), as an ISO-ish string. */
+  published(): string {
+    const metas = ["meta[property='article:published_time']", "meta[property='og:article:published_time']", "meta[name='date']", "meta[name='pubdate']", "meta[itemprop='datePublished']", "meta[property='article:modified_time']"];
+    for (const sel of metas) { const v = this.doc.querySelector(sel)?.getAttribute("content"); if (v && /\d{4}/.test(v)) return v.trim(); }
+    const t = this.doc.querySelector("time[datetime]")?.getAttribute("datetime"); if (t && /\d{4}/.test(t)) return t.trim();
+    for (const s of Array.from(this.doc.querySelectorAll("script[type='application/ld+json']"))) {
+      const m = (s.textContent ?? "").match(/"date(?:Published|Modified)"\s*:\s*"([^"]+)"/); if (m?.[1]) return m[1];
+    }
+    return "";
+  }
+
   text(): string { return norm(this.doc.body?.textContent); }
   title(): string { return norm(this.doc.querySelector("title")?.textContent); }
   markdown(maxChars = 40000): string { return toMarkdown(this.mainNode() as never, this.url, maxChars); }

@@ -5,6 +5,7 @@ import { fetchPage, generateIllustration, isPublicHttpUrl, research } from "./br
 import { deepResearch } from "./deep-research";
 import { promptCondense, SYSTEM_WRITER } from "./prompts";
 import { clear, ago, el, shareBlob } from "./dom";
+import { saveToDevice } from "../device-files";
 import { browserParse } from "../web/page";
 import { approveOutline, buildSummary, expandToTarget, buildVtm, designBranding, buildStore, discoverPockets, generateOutlines, newProduct, planChapters, qualityReport, refineVtm, renderImages, reviseOutline, writeManuscript, type EngineEnv, type Progress } from "./engine";
 import { exportProduct, FONT_URLS, FORMAT_INFO, measurePdfPages, renderExport, type ExportFormat } from "./export-runtime";
@@ -400,7 +401,7 @@ export function mountProducts(root: HTMLElement, host: ProductsHost): { open: (o
         const info = FORMAT_INFO[f];
         c.append(el("div", { class: "pb-export" }, el("div", {}, el("strong", { text: info.label }), el("small", { text: info.hint })),
           el("div", { class: "pb-row" },
-            el("button", { class: "pb-btn small", type: "button", text: "Save", onclick: async (e: Event) => { const b = e.target as HTMLButtonElement; b.disabled = true; status.textContent = `Building ${info.label}…`; try { const meta = await exportProduct(p, f); status.textContent = `Saved ${meta.name} (${(meta.size / 1024).toFixed(0)} KB) to your files.`; } catch (err) { status.textContent = err instanceof Error ? err.message : "Export failed."; } b.disabled = false; } }),
+            el("button", { class: "pb-btn small", type: "button", text: "Save", onclick: async (e: Event) => { const b = e.target as HTMLButtonElement; b.disabled = true; status.textContent = `Building ${info.label}…`; try { const out = await exportProduct(p, f); const saved = await saveToDevice(out.blob, out.filename); status.textContent = `${saved.message} (${(out.meta.size / 1024).toFixed(0)} KB). Also kept in your Ultron files.`; } catch (err) { status.textContent = err instanceof Error ? err.message : "Export failed."; } b.disabled = false; } }),
             el("button", { class: "pb-btn small ghost", type: "button", text: "Share", onclick: async (e: Event) => { const b = e.target as HTMLButtonElement; b.disabled = true; status.textContent = `Building ${info.label}…`; try { const blob = await renderExport(p, f); const how = await shareBlob(blob, `${bookTitle(p).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 50) || "ebook"}.${info.ext}`); status.textContent = how === "shared" ? "Shared." : "Download started."; } catch (err) { status.textContent = err instanceof Error ? err.message : "Export failed."; } b.disabled = false; } }))));
       }
       c.append(status);

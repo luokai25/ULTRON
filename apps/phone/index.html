@@ -99,6 +99,16 @@
           <div><span class="feature-eyebrow">MODEL CONNECTIONS</span><h1>LLM API KEYS</h1><p>Existing provider keys are loaded automatically from the server-side Vault.</p></div>
           <div class="llm-key-header-actions"><button id="llm-api-keys-back" class="icon-btn" type="button" aria-label="Back to chat">‹</button></div>
         </header>
+        <section class="llm-key-card llm-local-card" aria-labelledby="llm-local-heading">
+          <div class="llm-key-heading"><strong id="llm-local-heading">Local model · runs on this phone</strong><span id="llm-local-state">Not loaded</span></div>
+          <p id="llm-local-status" class="llm-api-key-status" role="status" aria-live="polite">Import a .gguf model file to chat and build books offline.</p>
+          <label class="llm-key-field"><span>Installed models</span><select id="llm-local-select" aria-label="Installed local models"></select></label>
+          <div class="llm-local-actions" style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="llm-local-import" class="gold-button" type="button">Import model (.gguf)</button>
+            <button id="llm-local-load" class="ghost" type="button">Load</button>
+            <button id="llm-local-unload" class="ghost" type="button">Unload</button>
+          </div>
+        </section>
         <section class="llm-key-card llm-cloud-card">
           <div class="llm-key-heading"><strong>Provider keys · direct from this device</strong><span id="cloud-brain-state">Checking keys…</span></div>
           <p id="cloud-brain-status" class="llm-api-key-status" data-state="missing" role="status" aria-live="polite">Keys are verified and used directly from this device. No account or sign-in is required.</p>
@@ -229,6 +239,7 @@
         <input id="connectors-search" type="search" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Search plugins" aria-label="Search plugins" />
         <small id="connectors-status" class="panel-status" role="status" aria-live="polite"></small>
       </div>
+      <div id="composio-panel-card" class="field composio-card"></div>
       <div id="connectors-list" class="plug-grid"></div>
     </section>
 
@@ -281,6 +292,7 @@
           <p id="presence-settings-status" class="native-model-status" role="status">Voice backend: device speech fallback. ULTRON's dedicated local neural voice model is not installed yet.</p>
         </section>
         <section id="products-settings" class="field" aria-labelledby="products-settings-heading"></section>
+        <section id="downloads-settings" class="field"></section>
         <section id="connectors-settings" class="field" aria-labelledby="composio-heading"></section>
         <section class="field" aria-labelledby="cloud-sync-heading">
           <span id="cloud-sync-heading">Storage</span>

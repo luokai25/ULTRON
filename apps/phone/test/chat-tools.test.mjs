@@ -47,8 +47,9 @@ test("a current-events question searches, reads pages, numbers sources and build
   const r = await ct.gatherToolContext("what's the latest news on the new battery plant", [], base({ http: makeHttp(log) }));
   assert.equal(r.usedWeb, true);
   assert.ok(r.sources.length >= 2);
-  assert.match(r.context, /\[1\] Battery plant opens \(https:\/\/news1\.example\/a\)/);
+  assert.match(r.context, /\[1\] Battery plant opens[^\n]*news1\.example/);
   assert.match(r.context, /1500 workers/);
+  assert.match(r.context, /Do NOT answer with a list of links/);
   const footer = ct.sourcesFooter(r.sources, "The plant opened [1] and will hire many.");
   assert.match(footer, /\*\*Sources\*\*\n1\. \[Battery plant opens\]\(https:\/\/news1\.example\/a\)/);
   assert.ok(!footer.includes("2."), "only cited sources are listed when the reply cites some");
@@ -70,7 +71,7 @@ test("connected apps run through the tool loop, with approval, and feed the repl
   const calls = []; const approvals = [];
   const composio = {
     getSettings: () => ({ enabled: true, askBefore: true, allowedTools: [], webInChat: true }), updateSettings: () => {}, ensureFresh: async () => {},
-    getState: () => ({ status: "connected", tools: [{ name: "GMAIL_FETCH_EMAILS", description: "fetch", inputSchema: {} }, { name: "GMAIL_SEND_EMAIL", description: "send", inputSchema: {} }] }),
+    getState: () => ({ status: "connected", groups: [], connections: null, tools: [{ name: "GMAIL_FETCH_EMAILS", description: "fetch", inputSchema: {} }, { name: "GMAIL_SEND_EMAIL", description: "send", inputSchema: {} }] }),
     call: async (n, a) => { calls.push(n); return { ok: true, text: n === "GMAIL_FETCH_EMAILS" ? "3 unread: from Sam, from Ana, from Lee" : "sent" }; },
   };
   const script = [`<tool_call>{"name":"GMAIL_FETCH_EMAILS","arguments":{"max":3}}</tool_call>`, `<tool_call>{"name":"GMAIL_SEND_EMAIL","arguments":{"to":"sam@x.y"}}</tool_call>`, `<final>You have 3 unread. I did not send anything.</final>`];
@@ -86,7 +87,7 @@ test("connected apps run through the tool loop, with approval, and feed the repl
 
 test("connectors are not touched when disabled, disconnected or irrelevant", async () => {
   let used = false;
-  const mk = (over) => ({ getSettings: () => ({ enabled: true, askBefore: true, allowedTools: [], webInChat: true, ...over.settings }), updateSettings() {}, ensureFresh: async () => { used = true; }, getState: () => ({ status: "connected", tools: [{ name: "A_GET", description: "", inputSchema: {} }], ...over.state }), call: async () => ({ ok: true, text: "x" }) });
+  const mk = (over) => ({ getSettings: () => ({ enabled: true, askBefore: true, allowedTools: [], webInChat: true, ...over.settings }), updateSettings() {}, ensureFresh: async () => { used = true; }, getState: () => ({ status: "connected", groups: [], connections: null, tools: [{ name: "A_GET", description: "", inputSchema: {} }], ...over.state }), call: async () => ({ ok: true, text: "x" }) });
   await ct.gatherToolContext("check my gmail", [], base({ composio: mk({ settings: { enabled: false } }), complete: async () => "<final>x</final>" }));
   await ct.gatherToolContext("check my gmail", [], base({ composio: mk({ state: { status: "no-key" } }), complete: async () => "<final>x</final>" }));
   await ct.gatherToolContext("explain recursion", [], base({ composio: mk({}), complete: async () => "<final>x</final>" }));
