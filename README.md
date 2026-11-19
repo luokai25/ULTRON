@@ -3,7 +3,6 @@
 ultron is a personal AI companion that runs as an Android app. It has no server: chat, memory, keys, files and plugins all live on the phone, and requests go straight from the device to the AI provider you choose.
 
 - **Android:** APK releases are published from GitHub Actions on every change under `apps/phone`.
-- **Source:** [luokai25/ultran](https://github.com/luokai25/ultran)
 
 This is a single-owner personal app, not a multi-user service.
 
