@@ -16,7 +16,17 @@ export type ComposioState = {
   serverName: string; connections: { text: string; at: number; ok: boolean } | null; keyHint: string;
   /** Where the key in use comes from: one the owner pasted, the one built into this app, or none. */
   keySource: "own" | "built-in" | "none";
+  /** App slugs the owner has connected in Composio, read from the tool list. */
+  connectedApps: string[];
+  /** Per-app status and accounts, from COMPOSIO_MANAGE_CONNECTIONS (action list). */
+  apps: Record<string, AppConnection>;
 };
+export type ComposioAccount = { id: string; label: string; status: string; isDefault: boolean };
+export type AppConnection = { slug: string; status: string; accounts: ComposioAccount[] };
+
+/** Toolkits probed for connection status on every refresh, in addition to any named in Composio's own tool description. */
+export const COMMON_TOOLKITS = ["gmail", "googlecalendar", "googledrive", "googledocs", "googlesheets", "googleslides", "googletasks", "googlemeet", "googlesuper", "github", "notion", "slack", "linear", "outlook", "microsoft_word", "excel", "microsoft_teams", "onedrive", "dropbox", "canva", "figma", "cloudflare", "sentry", "zoom", "youtube", "instagram", "reddit", "twitter", "linkedin", "facebook", "discord", "telegram", "whatsapp", "trello", "asana", "jira", "clickup", "todoist", "hubspot", "salesforce", "stripe", "shopify", "airtable", "calendly", "mailchimp", "zendesk", "gumroad", "amazon", "brave_search", "google_analytics", "google_search_console", "shotstack", "higgsfield_mcp", "github_mcp", "agent_mail", "financial_datasets_ai_mcp", "wispr_flow_mcp", "openai", "perplexityai", "firecrawl", "exa", "tavily", "elevenlabs", "heygen", "replicate"];
+
 export type ComposioSettings = { enabled: boolean; askBefore: boolean; allowedTools: string[]; webInChat: boolean };
 
 export const DEFAULT_SETTINGS: ComposioSettings = { enabled: true, askBefore: true, allowedTools: [], webInChat: true };
@@ -28,6 +38,18 @@ const KEY_NAME = "ultron.composio.consumer-key.v1";
 const CACHE = "ultron.composio.cache.v1";
 const SETTINGS = "ultron.composio.settings.v1";
 const BUILT_IN_OFF = "ultron.composio.built-in-off.v1";
+
+/**
+ * Composio lists the owner's connected apps inside the COMPOSIO_SEARCH_TOOLS description ("User has manually connected the apps: a, b, c").
+ * Reading it from every tools/list refresh is how the app learns about added or removed connections with no extra calls.
+ */
+export function parseConnectedApps(tools: Array<{ name: string; description: string }>): string[] {
+  for (const t of tools) {
+    const m = t.description.match(/connected\s+the\s+apps:\s*([^\n]*?)(?:\.\s|\.?\n|\.?$)/i) ?? t.description.match(/connected apps?:\s*([^\n]*?)(?:\.\s|\.?\n|\.?$)/i);
+    if (m?.[1]) return [...new Set(m[1].split(/[,;]/).map((x) => x.trim().toLowerCase()).filter((x) => /^[a-z0-9_]{2,40}$/.test(x)))].slice(0, 120);
+  }
+  return [];
+}
 
 export const validKey = (k: string): boolean => /^ck_[A-Za-z0-9_-]{8,}$/.test(k.trim());
 export const maskKey = (k: string): string => (k.length > 8 ? `${k.slice(0, 3)}…${k.slice(-4)}` : "ck_…");
@@ -54,7 +76,7 @@ export function guessListArgs(tool: McpTool): Array<Record<string, unknown>> {
 }
 
 export class ComposioManager {
-  private state: ComposioState = { status: "no-key", error: "", tools: [], toolHash: "", groups: [], syncedAt: 0, serverName: "", connections: null, keyHint: "", keySource: "none" };
+  private state: ComposioState = { status: "no-key", error: "", tools: [], toolHash: "", groups: [], syncedAt: 0, serverName: "", connections: null, keyHint: "", keySource: "none", connectedApps: [], apps: {} };
   private listeners = new Set<(s: ComposioState, change: "status" | "tools" | "connections") => void>();
   private client: McpClient | null = null; private timer: ReturnType<typeof setInterval> | null = null; private syncing: Promise<void> | null = null; private settings: ComposioSettings = { ...DEFAULT_SETTINGS };
 
@@ -85,7 +107,7 @@ export class ComposioManager {
     try { const s = JSON.parse(this.deps.kv.getItem(SETTINGS) ?? "null") as Partial<ComposioSettings> | null; if (s) this.settings = { ...DEFAULT_SETTINGS, ...s, allowedTools: Array.isArray(s.allowedTools) ? s.allowedTools : [] }; } catch { /* defaults */ }
     const resolved = await this.resolveKey();
     if (!resolved) { this.set({ status: "no-key", keySource: "none" }); return; }
-    try { const c = JSON.parse(this.deps.kv.getItem(CACHE) ?? "null") as { tools: McpTool[]; at: number; serverName?: string; connections?: ComposioState["connections"] } | null; if (c?.tools?.length) this.state = { ...this.state, tools: c.tools, toolHash: hashTools(c.tools), groups: groupTools(c.tools), syncedAt: c.at, serverName: c.serverName ?? "", connections: c.connections ?? null }; } catch { /* no cache */ }
+    try { const c = JSON.parse(this.deps.kv.getItem(CACHE) ?? "null") as { tools: McpTool[]; at: number; serverName?: string; connections?: ComposioState["connections"]; apps?: Record<string, AppConnection> } | null; if (c?.tools?.length) this.state = { ...this.state, tools: c.tools, toolHash: hashTools(c.tools) + "|" + parseConnectedApps(c.tools).join(","), groups: groupTools(c.tools), syncedAt: c.at, serverName: c.serverName ?? "", connections: c.connections ?? null, connectedApps: parseConnectedApps(c.tools), apps: c.apps ?? {} }; } catch { /* no cache */ }
     this.state = { ...this.state, status: this.state.tools.length ? "connected" : "connecting", keyHint: resolved.source === "built-in" ? "built in" : maskKey(resolved.key), keySource: resolved.source };
     this.emit("status");
     void this.sync("start");
@@ -119,7 +141,7 @@ export class ComposioManager {
   private async clearAll(): Promise<void> {
     try { this.deps.kv.removeItem(CACHE); } catch { /* ignore */ }
     this.client = null; this.stopAutoSync();
-    this.state = { status: "no-key", error: "", tools: [], toolHash: "", groups: [], syncedAt: 0, serverName: "", connections: null, keyHint: "", keySource: "none" }; this.emit("status");
+    this.state = { status: "no-key", error: "", tools: [], toolHash: "", groups: [], syncedAt: 0, serverName: "", connections: null, keyHint: "", keySource: "none", connectedApps: [], apps: {} }; this.emit("status");
   }
 
   private async getClient(): Promise<McpClient | null> {
@@ -139,10 +161,11 @@ export class ComposioManager {
       if (this.state.status !== "connected") this.set({ status: "connecting", error: "" });
       try {
         const tools = await client.listTools();
-        const hash = hashTools(tools);
+        const connectedApps = parseConnectedApps(tools);
+        const hash = hashTools(tools) + "|" + connectedApps.join(",");
         const changed = hash !== this.state.toolHash;
-        this.state = { ...this.state, status: "connected", error: "", tools, toolHash: hash, groups: groupTools(tools), syncedAt: this.now(), serverName: client.serverInfo.name ?? this.state.serverName };
-        try { this.deps.kv.setItem(CACHE, JSON.stringify({ tools, at: this.state.syncedAt, serverName: this.state.serverName, connections: this.state.connections })); } catch { /* cache is optional */ }
+        this.state = { ...this.state, status: "connected", error: "", tools, toolHash: hash, groups: groupTools(tools), syncedAt: this.now(), serverName: client.serverInfo.name ?? this.state.serverName, connectedApps };
+        try { this.deps.kv.setItem(CACHE, JSON.stringify({ tools, at: this.state.syncedAt, serverName: this.state.serverName, connections: this.state.connections, apps: this.state.apps })); } catch { /* cache is optional */ }
         this.emit(changed ? "tools" : "status");
         void this.probeConnections();
       } catch (e) {
@@ -168,25 +191,75 @@ export class ComposioManager {
   private onVisible = (): void => { if (document.visibilityState === "visible") void this.ensureFresh(60000); };
   private onOnline = (): void => { void this.sync("online"); };
 
-  async call(name: string, args: Record<string, unknown>): Promise<{ ok: boolean; text: string }> {
+  async call(name: string, args: Record<string, unknown>, retried = false): Promise<{ ok: boolean; text: string }> {
     const client = await this.getClient();
     if (!client) return { ok: false, text: "Composio is not connected. Add the API key in Settings." };
-    try { const r = await client.callTool(name, args); return { ok: !r.isError, text: r.text || (r.isError ? "The tool returned an error." : "Done.") }; }
-    catch (e) { return { ok: false, text: e instanceof Error ? e.message : "The tool call failed." }; }
+    try {
+      const r = await client.callTool(name, args);
+      const out = { ok: !r.isError, text: r.text || (r.isError ? "The tool returned an error." : "Done.") };
+      // Several accounts for one app: when an action ran without `account`, retry once with the owner's default account.
+      if (!retried && /^COMPOSIO_MULTI_EXECUTE_TOOL$/i.test(name) && /account/i.test(out.text) && /(required|multiple|specify|select|ambiguous|provide)/i.test(out.text) && Array.isArray(args.tools)) {
+        let changed = false;
+        const tools = (args.tools as Array<Record<string, unknown>>).map((t) => {
+          if (t.account) return t;
+          const def = this.defaultAccount(String(t.tool_slug ?? "").split("_")[0] ?? "");
+          if (!def) return t; changed = true; return { ...t, account: def.id };
+        });
+        if (changed) return this.call(name, { ...args, tools }, true);
+      }
+      return out;
+    } catch (e) { return { ok: false, text: e instanceof Error ? e.message : "The tool call failed." }; }
+  }
+
+  /** Calls a tool and parses Composio's usual `{successful, data, error}` envelope. */
+  async callJson(name: string, args: Record<string, unknown>): Promise<{ ok: boolean; json: Record<string, unknown> | null; text: string }> {
+    const r = await this.call(name, args);
+    let json: Record<string, unknown> | null = null;
+    try { json = JSON.parse(r.text) as Record<string, unknown>; } catch { const m = r.text.match(/\{[\s\S]*\}/); if (m) { try { json = JSON.parse(m[0]) as Record<string, unknown>; } catch { /* not JSON */ } } }
+    const successful = json && typeof json.successful === "boolean" ? json.successful : r.ok;
+    return { ok: r.ok && successful, json, text: r.text };
   }
 
   /**
-   * Asks Composio which apps are connected by calling its connections tool directly with schema-derived arguments.
-   * Tool names and arguments come from Composio at runtime; if the call does not fit, the snapshot stays empty and the
-   * settings panel offers to ask Ultron to check instead.
+   * Reads which apps are connected and which accounts each has, with no model involved: COMPOSIO_MANAGE_CONNECTIONS (action list)
+   * over the common toolkits plus every app named in the tool description. Safe: listing has no side effects.
    */
-  async probeConnections(): Promise<void> {
-    const tool = this.state.tools.find((t) => /MANAGE_CONNECTIONS|LIST_CONNECTIONS|CONNECTED_ACCOUNTS|CHECK_CONNECTIONS/i.test(t.name));
-    if (!tool) return;
-    for (const args of guessListArgs(tool)) {
-      const r = await this.call(tool.name, args);
-      if (r.ok && r.text.trim()) { this.set({ connections: { text: r.text.slice(0, 6000), at: this.now(), ok: true } }, "connections"); try { this.deps.kv.setItem(CACHE, JSON.stringify({ tools: this.state.tools, at: this.state.syncedAt, serverName: this.state.serverName, connections: this.state.connections })); } catch { /* ignore */ } return; }
-    }
+  async refreshConnections(): Promise<void> {
+    if (!this.state.tools.some((t) => /^COMPOSIO_MANAGE_CONNECTIONS$/i.test(t.name))) return;
+    const slugs = [...new Set([...this.state.connectedApps, ...COMMON_TOOLKITS])];
+    const found: Record<string, AppConnection> = { ...this.state.apps };
+    const chunks: string[][] = []; for (let i = 0; i < slugs.length; i += 25) chunks.push(slugs.slice(i, i + 25));
+    await Promise.all(chunks.map(async (chunk) => {
+      const r = await this.callJson("COMPOSIO_MANAGE_CONNECTIONS", { toolkits: chunk.map((name) => ({ name, action: "list" })) });
+      const results = (r.json?.data as { results?: Record<string, unknown> } | undefined)?.results;
+      if (!results || typeof results !== "object") return;
+      for (const [slug, raw] of Object.entries(results)) {
+        const o = (raw && typeof raw === "object" ? raw : {}) as { status?: string; accounts?: Array<Record<string, unknown>> };
+        const accounts: ComposioAccount[] = (Array.isArray(o.accounts) ? o.accounts : []).map((a) => {
+          const info = (a.user_info && typeof a.user_info === "object" ? a.user_info : {}) as Record<string, unknown>;
+          const label = String(a.alias ?? a.label ?? info.email ?? info.name ?? info.login ?? info.username ?? a.id ?? "account");
+          return { id: String(a.id ?? ""), label, status: String(a.status ?? "").toLowerCase(), isDefault: a.is_default === true };
+        }).filter((a) => a.id);
+        found[slug.toLowerCase()] = { slug: slug.toLowerCase(), status: String(o.status ?? (accounts.length ? "active" : "not_connected")).toLowerCase(), accounts };
+      }
+    }));
+    const active = Object.values(found).filter((a) => a.accounts.some((x) => /active/.test(x.status))).map((a) => a.slug);
+    const connectedApps = [...new Set([...active, ...this.state.connectedApps.filter((a) => found[a] === undefined)])];
+    this.set({ apps: found, connectedApps }, "tools");
+    try { this.deps.kv.setItem(CACHE, JSON.stringify({ tools: this.state.tools, at: this.state.syncedAt, serverName: this.state.serverName, connections: this.state.connections, apps: this.state.apps })); } catch { /* ignore */ }
+  }
+
+  /** Back-compat name used by older call sites. */
+  async probeConnections(): Promise<void> { await this.refreshConnections(); }
+
+  accountsFor(toolkit: string): ComposioAccount[] { return (this.state.apps[toolkit.toLowerCase()]?.accounts ?? []).filter((a) => /active/.test(a.status)); }
+  defaultAccount(toolkit: string): ComposioAccount | null { const list = this.accountsFor(toolkit); return list.find((a) => a.isDefault) ?? list[0] ?? null; }
+
+  /** Starts connecting an app. Returns the sign-in link the owner opens to finish; Composio completes the connection. */
+  async connectApp(slug: string): Promise<{ ok: boolean; url?: string; error?: string }> {
+    const r = await this.callJson("COMPOSIO_MANAGE_CONNECTIONS", { toolkits: [{ name: slug.toLowerCase() }] });
+    const text = r.text; const m = text.match(/https?:\/\/[^\s"'\\]+/g)?.find((u) => /composio|connect|auth|oauth/i.test(u));
+    return m ? { ok: true, url: m } : { ok: false, error: r.json ? String((r.json.error ?? "Composio did not return a sign-in link.")) : "Composio did not return a sign-in link." };
   }
 
   setConnectionsSnapshot(text: string): void { this.set({ connections: { text: text.slice(0, 6000), at: this.now(), ok: true } }, "connections"); }

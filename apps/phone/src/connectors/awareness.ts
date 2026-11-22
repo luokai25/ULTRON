@@ -1,7 +1,8 @@
 import { parseConnectionChips, type ComposioSettings, type ComposioState } from "./composio";
 
 /** Names of the apps the owner has connected, as best as can be told from Composio's connections reply and tool names. */
-export function connectedAppNames(state: Pick<ComposioState, "connections" | "groups" | "status">): string[] {
+export function connectedAppNames(state: Pick<ComposioState, "connections" | "groups" | "status"> & { connectedApps?: string[]; apps?: ComposioState["apps"] }): string[] {
+  if (state.connectedApps?.length) return state.connectedApps.slice(0, 60);
   const out = new Set<string>();
   if (state.connections) for (const c of parseConnectionChips(state.connections.text)) if (/active|connected|enabled|success/i.test(c.status)) out.add(c.name);
   for (const g of state.groups) if (g.id !== "COMPOSIO") out.add(g.id.toLowerCase());
@@ -20,7 +21,7 @@ export function buildToolAwareness(input: AwarenessInput): string {
   const lines: string[] = ["REAL ABILITIES OF THIS APP (use them; never say you cannot do these when they are available):"];
   if (settings.enabled && state.status === "connected") {
     lines.push(`- Connected apps (via Composio): ONLINE with ${state.tools.length} tools${apps.length ? `. Apps the owner connected: ${apps.join(", ")}` : ""}. When the owner asks about email, calendar, documents, files, messages, tasks, code repos, spreadsheets, CRM, payments, social posts or any connected app, the app automatically runs the right tool BEFORE you answer and places the outcome in the message under "[Connected apps: ...]". Answer from that outcome. If it says the owner declined an action, do not retry or pressure them. Reading is automatic; sending, posting, creating or deleting always asks the owner for approval first.`);
-    lines.push("- If the owner asks which apps are connected or what you can access, answer from the list above. They can add or remove apps in Composio; the list refreshes automatically (Settings → Connected apps, or the Tools tab).");
+    lines.push("- If the owner asks which apps are connected or what you can access, answer from the list above. Some apps have several accounts (for example more than one Gmail or GitHub); when it is ambiguous which account to use, ask the owner. They can add or remove apps in Composio; the list refreshes automatically (Settings → Connected apps, or the Tools tab).");
   } else if (state.status === "connecting") lines.push("- Connected apps (Composio): connecting right now. Tell the owner to try again in a moment if they ask about their apps.");
   else if (state.status === "error") lines.push(`- Connected apps (Composio): currently unreachable (${state.error || "network problem"}). Say so plainly if the owner asks about their apps.`);
   else lines.push("- Connected apps (Composio): not connected. If the owner asks for something that needs their apps, tell them to open Settings → Connected apps (or the Tools tab) to connect.");

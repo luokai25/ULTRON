@@ -182,7 +182,7 @@ test("the Plugins screen is local-only: no Supabase, Composio, MCP gateway or se
   const html = src("../index.html");
   assert.match(html, /id="connectors-list" class="plug-grid"/);
   assert.doesNotMatch(html, /composio-api-key|mcp-server-url/);
-  assert.match(src("main.ts"), /initPlugins\(\{ closeDrawer \}\)/);
+  assert.match(src("main.ts"), /initPlugins\(\{ closeDrawer\b/);
   // Regression: the Tools & Connectors button and back arrow must be wired, or the screen never opens.
   assert.match(src("plugins-ui.ts"), /#connectors-btn/);
   assert.match(src("plugins-ui.ts"), /#connectors-back/);

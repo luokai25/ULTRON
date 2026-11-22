@@ -44,6 +44,11 @@ import { ARTIFACT_URL_PREFIX, deleteLocalArtifact, listLocalArtifacts, localArti
 import { deleteDurableRecord, listDurableRecords, putDurableRecord, putDurableRecords, type DurableBucket } from "./durable-store";
 import { detectProductIntent } from "./products/intent";
 import { mountDownloadsSettings, saveToDevice, toast } from "./device-files";
+import { splitThinking, stripThinking, visibleReply } from "./think-filter";
+import { mediaCards, mediaSkeleton, setSkeletonLabel, thoughtDetails, type MediaItem } from "./chat-extras";
+import { detectMediaIntent, fallbackScenes, generateImage, parseScenes, type MediaIntent, type Scene } from "./media-gen";
+import { makeSlideshowVideo } from "./video-maker";
+import { extractJson } from "./products/json";
 import { createHttp } from "./products/http";
 import { createCompleter } from "./products/models";
 import { browserParse } from "./web/page";
@@ -53,6 +58,7 @@ import { askApproval } from "./connectors/approval-ui";
 import { gatherToolContext, sourcesFooter, type ToolContext } from "./connectors/chat-tools";
 import { loopContext, runToolLoop } from "./connectors/agent-loop";
 import { mountConnectorSettings } from "./connectors/settings-ui";
+import { mountAppsGrid } from "./connectors/apps-ui";
 import { buildToolAwareness } from "./connectors/awareness";
 import { askBrowserAccess, browserAccess } from "./connectors/browser-access";
 import type { LocalRoute as ProductsLocalRoute } from "./products/models";
@@ -67,7 +73,7 @@ type WorkspaceTask = { id: string; agent_id: string; message: string; status: st
 type WorkspaceAgent = { id: string; name: string; persona: string; enabled: boolean; tools: string[] };
 type ToolCall = { connector: string; action: string; ok: boolean; latency_ms?: number; detail?: string; approval_required?: boolean; approval_id?: string; artifact?: ArtifactCard };
 type ChatAttachment = { id: string; name: string; type: string; size: number; text?: string; dataUrl?: string };
-type Message = { id?: string; sequenceNo?: number; role: Role; content: string; attachments?: ChatAttachment[]; tools?: ToolCall[]; learningFeedback?: "helpful" | "not_helpful" };
+type Message = { id?: string; sequenceNo?: number; role: Role; content: string; thought?: string; media?: MediaItem[]; attachments?: ChatAttachment[]; tools?: ToolCall[]; learningFeedback?: "helpful" | "not_helpful" };
 type Conversation = {
   id: string;
   title: string;
@@ -1474,8 +1480,11 @@ function renderStreamedReply(body: HTMLElement, content: string): void {
   // Markdown rendering replaces body contents. Keep the live task panel
   // attached while tokens arrive so the working state remains visible.
   const livePanel = body.querySelector<HTMLElement>(".live-run");
+  const wasOpen = Boolean(body.querySelector("details.thought-details")?.hasAttribute("open"));
   livePanel?.remove();
-  renderMarkdown(content, body);
+  const split = splitThinking(content);
+  renderMarkdown(split.answer, body);
+  if (split.thought) body.prepend(thoughtDetails(split.thought, split.open, wasOpen));
   if (livePanel) body.appendChild(livePanel);
 }
 
@@ -1565,6 +1574,13 @@ function finishUserNode(root: HTMLElement, message: Message): void {
 }
 
 function finishAssistantNode(root: HTMLElement, message: Message): void {
+  // The model's thought (collapsed, tap to read) and any generated pictures or videos belong to the reply body.
+  const replyBody = root.querySelector<HTMLElement>(".body");
+  if (replyBody) {
+    replyBody.querySelectorAll("details.thought-details, .media-cards").forEach((n) => n.remove());
+    if (message.thought) replyBody.prepend(thoughtDetails(message.thought, false));
+    if (message.media?.length) replyBody.append(mediaCards(message.media));
+  }
   if (message.tools?.length) {
     const tools = document.createElement("details");
     tools.className = "tools tool-activity-details";
@@ -2657,7 +2673,7 @@ async function submitTurn(raw: string): Promise<void> {
   let draftSaveTimer: number | null = null;
   let streamedText = "";
   const persistStreamDraft = (): void => {
-    message.content = streamedText;
+    message.content = stripThinking(streamedText);
     if (draftSaveTimer !== null) return;
     draftSaveTimer = window.setTimeout(() => {
       draftSaveTimer = null;
@@ -2733,7 +2749,10 @@ async function submitTurn(raw: string): Promise<void> {
   }
 
   let result: ChatReply;
-  if (!cloudBrainActive && nativeModelLoaded && Capacitor.getPlatform() === "android") {
+  if (toolContext.directAnswer) {
+    // The app already did the work and wrote the answer itself (for example reading Gmail); no model call is needed.
+    result = { content: toolContext.directAnswer, session_id: "" };
+  } else if (!cloudBrainActive && nativeModelLoaded && Capacitor.getPlatform() === "android") {
     try {
       const profile = profileTask(requestText);
       const runtimeInventory = await localRuntimeInventoryPrompt();
@@ -2909,6 +2928,8 @@ async function submitTurn(raw: string): Promise<void> {
     await new Promise((resolve) => window.setTimeout(resolve, 180));
     result = localReply(requestText);
   }
+  let thoughtText = "";
+  if (!turnController.signal.aborted && result.content) { thoughtText = splitThinking(result.content).thought; result = { ...result, content: visibleReply(result.content) }; }
   if (turnController.signal.aborted) result = { content: "Stopped.", session_id: "" };
   else if (!result.content || !result.content.trim()) result = { ...result, content: "The selected model returned an empty response. Check that the model is loaded and its endpoint is reachable, then try again." };
   setThinking(false);
@@ -3003,6 +3024,7 @@ async function submitTurn(raw: string): Promise<void> {
     draftSaveTimer = null;
   }
   message.content = result.content;
+  if (thoughtText) message.thought = thoughtText;
   if (result.tool_calls?.length) message.tools = result.tool_calls.map((t) => ({ connector: t.connector, action: t.action, ok: t.ok, latency_ms: t.latency_ms, detail: t.detail, approval_required: t.approval_required, approval_id: t.approval_id, artifact: t.artifact }));
   convo.messages.push(message);
   convo.updatedAt = Date.now();
@@ -3092,6 +3114,8 @@ async function submit(raw: string): Promise<void> {
   if (!busy && !pendingAttachments.length) {
     const intent = detectProductIntent(raw);
     if (intent) { handOffToProducts(raw, intent.topic); return; }
+    const media = detectMediaIntent(raw);
+    if (media) { void handleMediaRequest(raw, media); return; }
   }
   try {
     await submitTurn(raw);
@@ -4473,7 +4497,7 @@ const webRenderer = nativeRenderer();
 async function checkConnectedAppsWithUltron(): Promise<string> {
   await composioManager.sync("check");
   if (composioManager.getState().status !== "connected") throw new Error(composioManager.getState().error || "Composio is not connected.");
-  const r = await runToolLoop("Check my active connections for all toolkits and list every connected app with its status (connected, needs sign-in, or not connected). If the tools support it, list all of them, not just a few.", [], composioManager.getState().tools, { complete: toolComplete, execute: (n, a) => composioManager.call(n, a), askBefore: true, approve: askApproval, alwaysAllowed: new Set(composioManager.getSettings().allowedTools) }, 6);
+  const r = await runToolLoop("Check my active connections for all toolkits and list every connected app with its status (connected, needs sign-in, or not connected). If the tools support it, list all of them, not just a few.", [], composioManager.getState().tools, { complete: toolComplete, execute: (n, a) => composioManager.call(n, a), askBefore: true, approve: askApproval, alwaysAllowed: new Set(composioManager.getSettings().allowedTools) }, 8, composioManager.getState().connectedApps);
   return r.final || loopContext(r).replace(/^[\s\S]*?\]\n/, "");
 }
 void composioManager.init().then(() => composioManager.startAutoSync()).catch((error) => console.error("[ULTRON composio]", error));
@@ -4481,6 +4505,7 @@ mountDownloadsSettings(req<HTMLElement>("#downloads-settings"));
 const connectorHost = { checkWithUltron: checkConnectedAppsWithUltron, openProducts: () => { closeSheet(); void openProductsTab().catch((error) => { hideFeatureScreens(); console.error("[ULTRON products]", error); }); } };
 mountConnectorSettings(req<HTMLElement>("#connectors-settings"), composioManager, connectorHost);
 mountConnectorSettings(req<HTMLElement>("#composio-panel-card"), composioManager, connectorHost, "panel");
+mountAppsGrid(req<HTMLElement>("#composio-apps-grid"), composioManager, { openUrl: (url) => { void Browser.open({ url }); }, askUltron: (prompt) => { hideFeatureScreens(); setActiveNavigation(navChatButton); promptEl.value = prompt; autosize(); promptEl.focus(); } });
 
 // AI Digital Products: loaded on first use so the wizard, PDF and EPUB code stay out of the startup bundle.
 type ProductsController = { open: (options?: { topic?: string; autostart?: boolean }) => void; resume: (id: string) => Promise<void> };
@@ -4502,6 +4527,63 @@ async function openProductsTab(options?: { topic?: string; autostart?: boolean }
   (await productsTab()).open(options);
 }
 req<HTMLButtonElement>("#drawer-products").addEventListener("click", () => { void openProductsTab().catch((error) => { hideFeatureScreens(); console.error("[ULTRON products]", error); }); });
+
+
+/** "Make an image / video of X": generated with free keyless services, shown inline in the chat like ChatGPT does. */
+async function handleMediaRequest(raw: string, intent: MediaIntent): Promise<void> {
+  let convo = active();
+  if (!convo) { convo = { id: uid(), title: "New conversation", updatedAt: Date.now(), messages: [] }; store.conversations.push(convo); store.activeId = convo.id; }
+  const text = raw.trim();
+  if (convo.messages.length === 0) convo.title = text.length > 44 ? `${text.slice(0, 43)}…` : text;
+  const reply: Message = { id: uid(), role: "assistant", content: "" };
+  convo.messages.push({ role: "user", content: text }, reply);
+  convo.updatedAt = Date.now();
+  saveStore(); promptEl.value = ""; autosize(); renderConversation(); renderHistory();
+  const replyBody = messagesEl.lastElementChild?.querySelector<HTMLElement>(".body") ?? null;
+  const box = mediaSkeleton(intent.kind, "Starting…");
+  replyBody?.append(box);
+  scrollToEnd(false);
+  const controller = new AbortController();
+  busy = true; activeTurnController = controller; syncSendButton();
+  const label = (s: string): void => setSkeletonLabel(box, s);
+  const engineName = (e: string): string => (e === "horde" ? "the AI Horde community network" : "Pollinations");
+  const save = async (blob: Blob, mime: string, name: string, description: string): Promise<string> => (await saveLocalArtifact({ name, blob, mimeType: mime, description })).id;
+  try {
+    if (intent.kind === "image") {
+      const img = await generateImage(intent.prompt, { http: toolHttp, signal: controller.signal, status: label });
+      if (!img) throw new Error("none");
+      const id = await save(new Blob([img.bytes as BlobPart], { type: img.mime }), img.mime, `ultron-image-${Date.now()}.${img.mime.includes("png") ? "png" : img.mime.includes("webp") ? "webp" : "jpg"}`, intent.prompt);
+      reply.media = [{ id, kind: "image", title: intent.prompt.slice(0, 80), prompt: intent.prompt, mime: img.mime, source: img.engine }];
+      reply.content = `Here is your image. It was made with ${engineName(img.engine)} (free, no key) in ${Math.round(img.ms / 1000)}s. Tap it to open full screen or download it, and tell me what to change.`;
+    } else {
+      label("Planning the scenes");
+      let scenes: Scene[] = fallbackScenes(intent.prompt);
+      try {
+        const planned = parseScenes(extractJson(await toolComplete([{ role: "system", content: "You plan short videos. Reply with ONE JSON object only." }, { role: "user", content: `Video idea: ${intent.prompt}\nWrite 4 scenes for a ~13 second video. Each scene: a short on-screen caption (max 8 words) and a vivid image prompt (subject, setting, lighting, style; keep one consistent visual style across scenes; no text in the picture).\nJSON: {"scenes":[{"caption":"","imagePrompt":""}]}` }], 600, controller.signal)));
+        if (planned.length >= 2) scenes = planned;
+      } catch (error) { if (controller.signal.aborted) throw error; }
+      const slides: Array<{ image: Blob; caption: string }> = [];
+      for (const [i, scene] of scenes.entries()) {
+        if (controller.signal.aborted) throw new DOMException("Stopped", "AbortError");
+        label(`Scene ${i + 1} of ${scenes.length}: painting`);
+        const img = await generateImage(scene.imagePrompt, { http: toolHttp, signal: controller.signal, status: (s) => label(`Scene ${i + 1} of ${scenes.length}: ${s}`) });
+        if (img) slides.push({ image: new Blob([img.bytes as BlobPart], { type: img.mime }), caption: scene.caption });
+      }
+      if (slides.length < 2) throw new Error("none");
+      const video = await makeSlideshowVideo(slides, { onProgress: (f) => label(`Putting the video together ${Math.round(f * 100)}%`), signal: controller.signal });
+      const id = await save(video.blob, video.mime, `ultron-video-${Date.now()}.${video.mime.includes("mp4") ? "mp4" : "webm"}`, intent.prompt);
+      reply.media = [{ id, kind: "video", title: intent.prompt.slice(0, 80), prompt: intent.prompt, mime: video.mime }];
+      reply.content = `Here is your ${Math.round(video.seconds)}-second video, built on this phone from ${slides.length} AI pictures with slow motion and captions. True text-to-video needs a paid service, so I can also try your connected apps (for example Higgsfield or Shotstack) if you want real AI motion.`;
+    }
+  } catch (error) {
+    const aborted = error instanceof DOMException && error.name === "AbortError";
+    reply.content = aborted ? "Stopped." : `The free ${intent.kind} services did not answer (they are rate limited and can be busy). Try again in a minute. I can also make ${intent.kind === "video" ? "it" : "images"} with your connected apps, such as Canva or Higgsfield, through Composio.`;
+  }
+  box.remove();
+  convo.updatedAt = Date.now();
+  saveStore(); renderConversation(); renderHistory();
+  busy = false; activeTurnController = null; syncSendButton(); scrollToEnd(false);
+}
 
 /** "Make me an ebook about X" in normal chat: Ultron builds it in the products tab, so it lands in the projects gallery. */
 function handOffToProducts(raw: string, topic: string): void {
@@ -4691,7 +4773,8 @@ if (synth) {
  * ------------------------------------------------------------------ */
 
 
-initPlugins({ closeDrawer });
+const pluginsPanel = initPlugins({ closeDrawer, externalApps: () => composioManager.getState().connectedApps.filter((a) => composioManager.accountsFor(a).length > 0 || !composioManager.getState().apps[a]) });
+composioManager.subscribe(() => pluginsPanel.refresh());
 void seedBundledKeys().then((seeded) => { if (seeded.added > 0) void refreshCloudLlmScreen(); }).catch(() => undefined);
 buildThemes();
 applyTheme(settings.theme);

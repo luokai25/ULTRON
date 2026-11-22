@@ -146,7 +146,7 @@ test("model picker lives above the composer and request progress survives stream
   assert.ok(modelButton > composer && modelButton < html.indexOf('id="prompt"'));
   assert.ok(modelButton > topbarEnd, "model selector must not occupy the top header");
   assert.match(main, /function renderStreamedReply\(/);
-  assert.match(main, /livePanel\?\.remove\(\)[\s\S]*?renderMarkdown\(content, body\)[\s\S]*?body\.appendChild\(livePanel\)/);
+  assert.match(main, /livePanel\?\.remove\(\)[\s\S]*?renderMarkdown\((?:content|split\.answer), body\)[\s\S]*?body\.appendChild\(livePanel\)/);
   assert.match(main, /stage: "starting", label: "Working on your request"/);
 });
 

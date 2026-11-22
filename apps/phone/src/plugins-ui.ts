@@ -25,9 +25,14 @@ function tile(plugin: PluginDefinition): HTMLElement {
   return node;
 }
 
-export type PluginsHost = { closeDrawer: () => void };
+export type PluginsHost = {
+  closeDrawer: () => void;
+  /** Apps (slug list) connected through the connected-apps service the owner has connected. The on-device Google plugins for the same app are then hidden. */
+  externalApps?: () => string[];
+};
+const EXTERNAL_FOR_PLUGIN: Record<string, string> = { gmail: "gmail", google_calendar: "googlecalendar", google_drive: "googledrive" };
 
-export function initPlugins(host: PluginsHost): void {
+export function initPlugins(host: PluginsHost): { refresh: () => void } {
   // The Tools & Connectors button and the panel's back arrow. (These handlers were lost in the Plugins rebuild, which is why
   // the screen would not open.)
   const panel = need<HTMLElement>("#connectors-panel");
@@ -113,8 +118,10 @@ export function initPlugins(host: PluginsHost): void {
   function render(): void {
     const needle = search.value.trim().toLowerCase();
     const installedIds = new Set(pluginEngine.installed().map((p) => p.id));
-    const plugins = pluginEngine.catalog().filter((p) => !needle || `${p.name} ${p.tagline} ${p.description}`.toLowerCase().includes(needle));
-    count.textContent = `${installedIds.size} connected`;
+    const viaExternal = new Set(host.externalApps?.() ?? []);
+    const covered = (id: string): boolean => viaExternal.has(EXTERNAL_FOR_PLUGIN[id] ?? "\u0000");
+    const plugins = pluginEngine.catalog().filter((p) => !covered(p.id) && (!needle || `${p.name} ${p.tagline} ${p.description}`.toLowerCase().includes(needle)));
+    count.textContent = `${installedIds.size + viaExternal.size} connected`;
     list.replaceChildren();
     if (!plugins.length) list.append(el("p", "conn-empty", "No plugins match your search."));
     for (const plugin of plugins) {
@@ -137,4 +144,5 @@ export function initPlugins(host: PluginsHost): void {
   wrap.addEventListener("click", (event) => { if (event.target === wrap) closeSheet(); });
   document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !wrap.hidden && openId) closeSheet(); });
   render();
+  return { refresh: render };
 }

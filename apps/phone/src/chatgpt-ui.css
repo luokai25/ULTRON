@@ -568,3 +568,25 @@ progress { width:100%; accent-color:var(--accent); }
 #workspace-panel .workspace-team-builder, #workspace-panel .workspace-stats { display:none !important; }
 #workspace-panel .workspace-team-open { display:none !important; }
 #workspace-panel .workspace-synthesis-bar { display:none !important; }
+
+/* Thought disclosure and inline media */
+.thought-details{margin:0 0 10px;border:1px solid var(--hairline);border-radius:12px;background:rgba(255,255,255,.03);overflow:hidden}
+.thought-summary{cursor:pointer;list-style:none;padding:9px 12px;font-size:12px;font-weight:650;color:var(--muted);display:flex;align-items:center;gap:8px;min-height:40px}
+.thought-summary::-webkit-details-marker{display:none}
+.thought-summary::before{content:"▸";font-size:10px;transition:transform .15s}
+.thought-details[open] .thought-summary::before{transform:rotate(90deg)}
+.thought-body{padding:0 12px 12px;font-size:12px;line-height:1.6;color:#98a2b1;white-space:pre-wrap;overflow-wrap:anywhere;max-height:46vh;overflow:auto}
+.media-cards{display:grid;gap:12px;margin:12px 0}
+.media-card{margin:0;border:1px solid var(--hairline);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.03)}
+.media-frame{min-height:120px;display:grid;place-items:center;background:#0b0e13}
+.media-frame img,.media-frame video{display:block;width:100%;max-height:70vh;object-fit:contain}
+.media-caption{padding:9px 12px 4px;font-size:12px;color:#98a2b1;overflow-wrap:anywhere}
+.media-actions{display:flex;gap:8px;padding:6px 10px 10px}
+.media-actions button{min-height:36px;padding:0 14px;border:1px solid var(--hairline);border-radius:10px;background:rgba(255,255,255,.05);color:var(--ink);font-size:12px}
+.media-skeleton{margin:10px 0}.media-skeleton .media-shimmer{min-height:180px}
+.media-shimmer{background:linear-gradient(100deg,rgba(255,255,255,.04) 30%,rgba(255,255,255,.12) 50%,rgba(255,255,255,.04) 70%);background-size:220% 100%;animation:mediaShimmer 1.3s linear infinite}
+@keyframes mediaShimmer{to{background-position:-220% 0}}
+@media(prefers-reduced-motion:reduce){.media-shimmer{animation:none}}
+.media-lightbox{position:fixed;inset:0;z-index:300;display:grid;place-items:center;background:rgba(0,0,0,.92);padding:12px}
+.media-lightbox img,.media-lightbox video{max-width:100%;max-height:92vh;object-fit:contain}
+.media-lightbox-close{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:14px;width:44px;height:44px;border:0;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:24px}

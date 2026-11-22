@@ -106,17 +106,6 @@ test("manager follows Composio: tools added or removed show up on the next sync,
   assert.equal(secrets.m.size, 0);
 });
 
-test("connections probe uses the tool's own schema and parses chips", async () => {
-  const connTool = { name: "COMPOSIO_MANAGE_CONNECTIONS", description: "Manage", inputSchema: { type: "object", required: ["toolkits"], properties: { toolkits: { type: "array", items: { type: "string" } } } } };
-  const { s, http } = server({ tools: [connTool] });
-  s.onCall = (p) => (Object.keys(p.arguments).length === 0 ? { isError: true, content: [{ type: "text", text: "toolkits required" }] } : { content: [{ type: "text", text: JSON.stringify({ results: [{ toolkit: "gmail", status: "ACTIVE" }, { toolkit: "slack", status: "INITIATED" }] }) }] });
-  const m = new composio.ComposioManager({ http, secrets: memSecrets(), kv: memKv() });
-  await m.init(); await m.saveKey(KEY);
-  await new Promise((r) => setTimeout(r, 30)); // a successful sync probes connections on its own
-  assert.deepEqual(s.calls.map((c) => c.arguments), [{}, { toolkits: [] }]);
-  assert.deepEqual(composio.parseConnectionChips(m.getState().connections.text), [{ name: "gmail", status: "active" }, { name: "slack", status: "initiated" }]);
-});
-
 // ---------- tool loop ----------
 const scripted = (steps) => { let i = 0; const seen = []; return { complete: async (messages) => { seen.push(messages); return steps[Math.min(i++, steps.length - 1)]; }, seen }; };
 const call = (name, args = {}) => `<tool_call>${JSON.stringify({ name, arguments: args })}</tool_call>`;
@@ -204,4 +193,54 @@ test("built-in key: connects with no setup, can be turned off and on, and an own
   assert.equal(again.getState().keySource, "built-in"); assert.equal(again.getState().status, "connected");
   assert.equal(new composio.ComposioManager({ http, secrets, kv, builtInKey: "garbage" }).hasBuiltIn(), false);
   void s;
+});
+
+// ---------- real-service knowledge ----------
+const REAL_DESC = "Tool Server Info: Composio connects 500+ apps.\n  - User has manually connected the apps: agent_mail, amazon, brave_search, github, gmail, googlecalendar, googledrive, linear, notion, vercel, youtube, zoom. Prefer these apps when intent is unclear.\n\nSplitting guidelines (Important):\n  1. Atomic queries.";
+
+test("the connected-app list is read from Composio's own tool description", () => {
+  const apps = composio.parseConnectedApps([{ name: "COMPOSIO_SEARCH_TOOLS", description: REAL_DESC }, { name: "OTHER", description: "nothing" }]);
+  assert.deepEqual(apps, ["agent_mail", "amazon", "brave_search", "github", "gmail", "googlecalendar", "googledrive", "linear", "notion", "vercel", "youtube", "zoom"], "the last app is not lost to the sentence after the list");
+  assert.deepEqual(composio.parseConnectedApps([{ name: "X", description: "no list here" }]), []);
+});
+
+test("adding or removing an app in Composio changes the state and fires a tools event on the next sync", async () => {
+  const mk = (list) => [{ name: "COMPOSIO_SEARCH_TOOLS", description: `x\n  - User has manually connected the apps: ${list}. Prefer these apps.\n`, inputSchema: {} }];
+  const { s, http } = server({ tools: mk("gmail, github") });
+  const m = new composio.ComposioManager({ http, secrets: memSecrets(), kv: memKv() });
+  await m.init(); await m.saveKey(KEY);
+  assert.deepEqual(m.getState().connectedApps, ["gmail", "github"]);
+  const events = []; m.subscribe((_st, c) => events.push(c));
+  s.tools = mk("gmail, github, notion");
+  await m.sync("t");
+  assert.deepEqual(m.getState().connectedApps, ["gmail", "github", "notion"]);
+  assert.ok(events.includes("tools"), "a same-length tool list still counts as a change when the apps differ");
+  s.tools = mk("gmail");
+  await m.sync("t");
+  assert.deepEqual(m.getState().connectedApps, ["gmail"]);
+  const awareness = await loadSource("connectors/awareness.ts");
+  assert.deepEqual(awareness.connectedAppNames(m.getState()), ["gmail"]);
+});
+
+test("the tool worker is taught the real Composio protocol, with the owner's apps, and no personal data", async () => {
+  const pb = await loadSource("connectors/playbook.ts");
+  const text = loop.systemPrompt([{ name: "COMPOSIO_SEARCH_TOOLS", description: "d", inputSchema: {} }, { name: "COMPOSIO_MULTI_EXECUTE_TOOL", description: "d", inputSchema: {} }], "check my gmail", ["gmail", "github"]);
+  for (const must of ["COMPOSIO_SEARCH_TOOLS", "session_id", "COMPOSIO_GET_TOOL_SCHEMAS", "COMPOSIO_MULTI_EXECUTE_TOOL", "account_selection", "redirect_url", "nextPageToken", "RFC3339", "gmail, github", "ASK which account"]) assert.ok(text.includes(must), must);
+  assert.ok(!/@gmail\.com|luokai|creationslous/i.test(pb.composioPlaybook(["gmail"])), "no personal data in shipped knowledge");
+  assert.ok(!loop.systemPrompt([tool("OTHER_TOOL")], "x").includes("COMPOSIO PLAYBOOK"), "only for Composio");
+});
+
+test("approval policy covers Composio's meta tools exactly", () => {
+  const n = (name, args = {}) => loop.needsApproval(undefined, name, args);
+  for (const free of ["COMPOSIO_SEARCH_TOOLS", "COMPOSIO_GET_TOOL_SCHEMAS", "COMPOSIO_WAIT_FOR_CONNECTIONS", "COMPOSIO_SEARCH_SKILLS"]) assert.equal(n(free, {}), false, free);
+  assert.equal(n("COMPOSIO_MANAGE_CONNECTIONS", { toolkits: [{ name: "gmail", action: "list" }] }), false);
+  assert.equal(n("COMPOSIO_MANAGE_CONNECTIONS", { toolkits: [{ name: "gmail" }] }), false, "add only produces a sign-in link");
+  assert.equal(n("COMPOSIO_MANAGE_CONNECTIONS", { toolkits: [{ name: "gmail", action: "remove", account_id: "x" }] }), true);
+  assert.equal(n("COMPOSIO_PROXY_EXECUTE", { method: "GET", endpoint: "/user/repos", toolkit_slug: "github" }), false);
+  assert.equal(n("COMPOSIO_PROXY_EXECUTE", { method: "DELETE", endpoint: "/x", toolkit_slug: "github" }), true);
+  for (const asks of ["COMPOSIO_REMOTE_BASH_TOOL", "COMPOSIO_REMOTE_WORKBENCH", "COMPOSIO_MANAGE_SKILL", "COMPOSIO_SUBMIT_FEEDBACK"]) assert.equal(n(asks, {}), true, asks);
+  const multi = (...slugs) => n("COMPOSIO_MULTI_EXECUTE_TOOL", { tools: slugs.map((tool_slug) => ({ tool_slug, arguments: {} })) });
+  assert.equal(multi("GMAIL_FETCH_EMAILS", "GOOGLECALENDAR_EVENTS_LIST", "GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER", "GITHUB_FIND_REPOSITORIES", "GOOGLECALENDAR_GET_CURRENT_DATE_TIME"), false, "the reads seen in the live service run freely");
+  for (const w of ["GMAIL_SEND_EMAIL", "GMAIL_BATCH_MODIFY_MESSAGES", "GMAIL_CREATE_EMAIL_DRAFT", "GOOGLEDRIVE_ADD_FILE_SHARING_PREFERENCE", "GOOGLEDRIVE_CREATE_PERMISSION", "NOTION_UPDATE_PAGE", "LINEAR_DELETE_ISSUE", "GITHUB_CREATE_AN_ISSUE", "SLACK_SEND_MESSAGE"]) assert.equal(multi("GMAIL_FETCH_EMAILS", w), true, w);
+  assert.equal(multi("UNKNOWN_FROBNICATE_THING"), true, "anything unrecognised asks first");
 });

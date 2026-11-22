@@ -54,3 +54,18 @@ It deliberately does **not** spoof browser fingerprints or defeat bot protection
 
 `siteapi.ts` is an api-anything-style engine: watch a page make its own request for two different inputs, diff them into a template, replay it
 as plain HTTP, and fall back to rendering the page when the plain call is refused. Specs never contain cookies or credentials.
+
+## Using any Composio tool
+
+Requests that are about the owner's apps go three ways: (1) common reads (Gmail, Calendar, GitHub) are answered directly by the app, across every
+connected account, with no model needed; (2) every other tool runs through a guided executor where the code drives Composio's protocol (search,
+schemas, execute, session, accounts) and the model only fills in one small JSON of arguments, with error-driven retries; (3) writes always ask first and
+show the account. The connected apps and their accounts are read deterministically from COMPOSIO_MANAGE_CONNECTIONS (action list), and shown with logos in
+Tools & Connectors, where more apps can be connected through a Composio sign-in link.
+
+## Pictures and video in chat
+
+"Make an image of ..." uses free, keyless services in order: Pollinations, then the AI Horde anonymous queue. Results appear inline (full-screen view and
+Download) and are stored on the device. "Make a video about ..." plans scenes, paints each one, and builds a real MP4/WebM on the phone (slow zoom, fades,
+captions). That is image-to-video; keyless text-to-video with real motion does not exist, so real AI motion goes through the owner's connected apps.
+Reasoning from models like Qwen3 is hidden behind a tap-to-open "Thought".

@@ -3,6 +3,8 @@ import { Page, type Parse } from "../web/page";
 import type { Renderer } from "../web/render";
 import { loopContext, runToolLoop, wantsConnectors, type Approval, type Msg } from "./agent-loop";
 import type { ComposioManager } from "./composio";
+import { runComposioTask } from "./composio-agent";
+import { detectFastIntent, runFastPath } from "./fast-paths";
 import { asksAboutConnections, connectedAppNames, connectionsStatusContext } from "./awareness";
 import type { BrowserAccess } from "./browser-access";
 import { researchContext, webResearch } from "./web-research";
@@ -14,7 +16,7 @@ import { researchContext, webResearch } from "./web-research";
  */
 
 export type Source = { n: number; title: string; url: string };
-export type ToolContext = { context: string; sources: Source[]; usedWeb: boolean; usedConnectors: boolean };
+export type ToolContext = { context: string; sources: Source[]; usedWeb: boolean; usedConnectors: boolean; /** A finished answer written by the app itself; when present the chat model is not needed. */ directAnswer?: string };
 
 export type ChatToolsDeps = {
   http: Http; parse: Parse; renderer?: Renderer | null;
@@ -97,12 +99,24 @@ export async function gatherToolContext(text: string, history: Msg[], deps: Chat
     try {
       await cm.ensureFresh(120000);
       const allowed = new Set(cm.getSettings().allowedTools);
-      const r = await runToolLoop(text, history, cm.getState().tools, {
-        complete: deps.complete, execute: (name, args) => cm.call(name, args), approve: deps.approve, askBefore: cm.getSettings().askBefore, alwaysAllowed: allowed, onStatus: deps.status, signal: deps.signal,
-      });
+      const rich = typeof cm.callJson === "function" && typeof cm.accountsFor === "function";
+      const fast = rich ? detectFastIntent(text) : null;
+      let handled = false;
+      if (fast) {
+        const fp = await runFastPath(fast, { composio: cm, status: deps.status });
+        if (fp) { out.directAnswer = fp.answer; out.usedConnectors = true; handled = true; parts.push(`\n\n[Connected apps: answered directly by the app from the owner's ${fp.toolkit} just now.]`); }
+      }
+      if (!handled && rich && cm.getState().tools.some((t) => /^COMPOSIO_SEARCH_TOOLS$/i.test(t.name))) {
+        const r = await runComposioTask(text, history, { composio: cm, complete: deps.complete, approve: deps.approve, askBefore: cm.getSettings().askBefore, alwaysAllowed: allowed, status: deps.status, signal: deps.signal });
+        parts.push(r.context); out.usedConnectors = true; handled = true;
+        if (r.answer && (r.declined || r.asked)) out.directAnswer = r.answer;
+      }
+      if (!handled) {
+        const r = await runToolLoop(text, history, cm.getState().tools, { complete: deps.complete, execute: (name, args) => cm.call(name, args), approve: deps.approve, askBefore: cm.getSettings().askBefore, alwaysAllowed: allowed, onStatus: deps.status, signal: deps.signal }, 8, connectedAppNames(cm.getState()));
+        const ctx = loopContext(r);
+        if (ctx) { parts.push(ctx); out.usedConnectors = true; }
+      }
       if (allowed.size !== cm.getSettings().allowedTools.length) cm.updateSettings({ allowedTools: [...allowed] });
-      const ctx = loopContext(r);
-      if (ctx) { parts.push(ctx); out.usedConnectors = true; }
     } catch (e) { if (e instanceof DOMException && e.name === "AbortError") throw e; parts.push("\n\n[Connected apps could not be used for this request: " + (e instanceof Error ? e.message : "unknown error") + ". Tell the user plainly.]"); }
   }
 
