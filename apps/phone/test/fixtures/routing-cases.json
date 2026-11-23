@@ -1,0 +1,635 @@
+{
+ "connectedApps": [
+  "agent_mail",
+  "amazon",
+  "brave_search",
+  "canva",
+  "cloudflare",
+  "dropbox",
+  "excel",
+  "figma",
+  "github",
+  "gmail",
+  "google_analytics",
+  "google_search_console",
+  "googlecalendar",
+  "googledocs",
+  "googledrive",
+  "googlemeet",
+  "googlesheets",
+  "googleslides",
+  "googletasks",
+  "gumroad",
+  "hugging_face",
+  "instagram",
+  "kaggle",
+  "linear",
+  "microsoft_word",
+  "notion",
+  "outlook",
+  "reddit",
+  "sentry",
+  "shotstack",
+  "supabase",
+  "vercel",
+  "youtube",
+  "zoom"
+ ],
+ "cases": [
+  {
+   "tag": "implicit",
+   "text": "what did Sarah say to me this morning",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "do I have anything on friday afternoon",
+   "use": true,
+   "apps": [
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "anything new on main since yesterday",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "is the site deployed yet",
+   "use": true,
+   "apps": [
+    "vercel"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "what errors came in overnight",
+   "use": true,
+   "apps": [
+    "sentry"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "how many people visited my site yesterday",
+   "use": true,
+   "apps": [
+    "google_analytics"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "make a ticket for the login bug",
+   "use": true,
+   "apps": [
+    "linear"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "what's trending on r/LocalLLaMA",
+   "use": true,
+   "apps": [
+    "reddit"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "did anyone comment on my last video",
+   "use": true,
+   "apps": [
+    "youtube"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "find the contract Ahmed sent me last week",
+   "use": true,
+   "apps": [
+    "gmail",
+    "googledrive"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "am I free thursday at 3",
+   "use": true,
+   "apps": [
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "what's on my plate today",
+   "use": true,
+   "apps": [
+    "googletasks",
+    "googlecalendar",
+    "linear"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "who invited me to something this week",
+   "use": true,
+   "apps": [
+    "gmail",
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "which of my sites are down",
+   "use": true,
+   "apps": [
+    "cloudflare",
+    "vercel"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "check if the build passed",
+   "use": true,
+   "apps": [
+    "github",
+    "vercel"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "show my latest orders",
+   "use": true,
+   "apps": [
+    "gumroad",
+    "amazon"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "how are my posts doing",
+   "use": true,
+   "apps": [
+    "instagram"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "pull up the budget numbers",
+   "use": true,
+   "apps": [
+    "googlesheets",
+    "excel"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "what search queries bring people to my site",
+   "use": true,
+   "apps": [
+    "google_search_console"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "star the ULTRON repo and open an issue about the keys bug",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "read the thread from Omar about the invoice",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "what meetings did I miss",
+   "use": true,
+   "apps": [
+    "googlemeet",
+    "zoom",
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "upload this to my storage",
+   "use": true,
+   "apps": [
+    "googledrive",
+    "dropbox"
+   ]
+  },
+  {
+   "tag": "implicit",
+   "text": "anything urgent I should know about",
+   "use": true,
+   "apps": [
+    "gmail",
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "check my gmail",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "what's on my calendar tomorrow",
+   "use": true,
+   "apps": [
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "list my github repos",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "any unread emails from Ali",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "open my notion notes about pricing",
+   "use": true,
+   "apps": [
+    "notion"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "show open issues in luokai25/ULTRON",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "search my drive for the pitch deck",
+   "use": true,
+   "apps": [
+    "googledrive"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "add a row to my budget sheet",
+   "use": true,
+   "apps": [
+    "googlesheets"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "check my vercel deployments",
+   "use": true,
+   "apps": [
+    "vercel"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "what's my latest instagram post",
+   "use": true,
+   "apps": [
+    "instagram"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "look at my hugging face models",
+   "use": true,
+   "apps": [
+    "hugging_face"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "show my google analytics for last week",
+   "use": true,
+   "apps": [
+    "google_analytics"
+   ]
+  },
+  {
+   "tag": "explicit",
+   "text": "check outlook for anything from the bank",
+   "use": true,
+   "apps": [
+    "outlook"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "send Ahmed an email saying I'll be late",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "reply to the last email and say thanks",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "move my 3pm to 4",
+   "use": true,
+   "apps": [
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "tell Layla I'm running late",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "push this fix to the ULTRON repo",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "close the keys issue on github",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "create a doc with these meeting notes",
+   "use": true,
+   "apps": [
+    "googledocs"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "schedule a zoom with Ahmed tomorrow at 5",
+   "use": true,
+   "apps": [
+    "zoom",
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "post this on my instagram",
+   "use": true,
+   "apps": [
+    "instagram"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "deploy the latest build",
+   "use": true,
+   "apps": [
+    "vercel"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "remind me to call mom at 6",
+   "use": true,
+   "apps": [
+    "googletasks",
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "share the report with Omar",
+   "use": true,
+   "apps": [
+    "googledrive",
+    "gmail"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "commit these changes to main",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "write",
+   "text": "book 30 minutes with Sara next week",
+   "use": true,
+   "apps": [
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "mention",
+   "text": "@gmail what's new",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "mention",
+   "text": "@github summarize last week",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "mention",
+   "text": "@google_analytics top pages",
+   "use": true,
+   "apps": [
+    "google_analytics"
+   ]
+  },
+  {
+   "tag": "mention",
+   "text": "@notion find the roadmap",
+   "use": true,
+   "apps": [
+    "notion"
+   ]
+  },
+  {
+   "tag": "mention",
+   "text": "@linear what's assigned to me",
+   "use": true,
+   "apps": [
+    "linear"
+   ]
+  },
+  {
+   "tag": "negative",
+   "text": "explain how github actions caching works",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "what is a pull request",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "draft an email template for cold outreach",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "how do I write a good calendar invite",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "notion vs obsidian which is better",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "why do people hate meetings so much",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "what's a good schedule for studying",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "explain what a task queue is",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "write a poem about the sea",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "what is the capital of japan",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "tell me a joke",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "hi",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "fix this typescript error: Type string is not assignable to number",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "how does docker networking work",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "give me ideas for a youtube channel name",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "how do I get better at public speaking",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "what's the difference between an issue and a bug",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "translate good morning to arabic",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "how do vercel serverless functions scale",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "what does a sentry in a castle do",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "summarize the plot of Iron Man",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "negative",
+   "text": "what should I name my new project",
+   "use": false,
+   "apps": []
+  }
+ ]
+}

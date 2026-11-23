@@ -1,7 +1,8 @@
 import { isPublicHttpUrl, type Http } from "../products/browser";
 import { Page, type Parse } from "../web/page";
 import type { Renderer } from "../web/render";
-import { loopContext, runToolLoop, wantsConnectors, type Approval, type Msg } from "./agent-loop";
+import { loopContext, runToolLoop, type Approval, type Msg } from "./agent-loop";
+import { prettyAppName, routeWithModel, type RouteDecision } from "./intent-router";
 import type { ComposioManager } from "./composio";
 import { runComposioTask } from "./composio-agent";
 import { detectFastIntent, runFastPath } from "./fast-paths";
@@ -91,28 +92,36 @@ export async function gatherToolContext(text: string, history: Msg[], deps: Chat
   }
 
   const cm = deps.composio;
-  if (cm && asksAboutConnections(text)) {
+  const asksConnections = Boolean(cm && asksAboutConnections(text));
+  // Decide whether this message needs the owner's apps by what it asks for, not by trigger words. @mentions always win.
+  let route: RouteDecision | null = null;
+  if (cm && !asksConnections && cm.getSettings().enabled && cm.getState().status === "connected") {
+    route = await routeWithModel(text, connectedAppNames(cm.getState()), deps.complete, deps.signal);
+  }
+  if (cm && asksConnections) {
     await cm.ensureFresh(60000).catch(() => undefined);
     parts.push(connectionsStatusContext(cm.getState(), cm.getSettings()));
     out.usedConnectors = true;
-  } else if (cm && cm.getSettings().enabled && cm.getState().status === "connected" && wantsConnectors(text, connectedAppNames(cm.getState()))) {
+  } else if (cm && route?.use) {
+    // The task the tools see has @mentions removed; an explicit pointer is passed on so the right app is searched first.
+    const taskText = route.mode === "mention" ? `${route.task}\n\n[The owner pointed at: ${route.apps.map(prettyAppName).join(", ")}. Use those apps.]` : route.task;
     try {
       await cm.ensureFresh(120000);
       const allowed = new Set(cm.getSettings().allowedTools);
       const rich = typeof cm.callJson === "function" && typeof cm.accountsFor === "function";
-      const fast = rich ? detectFastIntent(text) : null;
+      const fast = rich ? detectFastIntent(route.task) : null;
       let handled = false;
       if (fast) {
         const fp = await runFastPath(fast, { composio: cm, status: deps.status });
         if (fp) { out.directAnswer = fp.answer; out.usedConnectors = true; handled = true; parts.push(`\n\n[Connected apps: answered directly by the app from the owner's ${fp.toolkit} just now.]`); }
       }
       if (!handled && rich && cm.getState().tools.some((t) => /^COMPOSIO_SEARCH_TOOLS$/i.test(t.name))) {
-        const r = await runComposioTask(text, history, { composio: cm, complete: deps.complete, approve: deps.approve, askBefore: cm.getSettings().askBefore, alwaysAllowed: allowed, status: deps.status, signal: deps.signal });
+        const r = await runComposioTask(taskText, history, { composio: cm, complete: deps.complete, approve: deps.approve, askBefore: cm.getSettings().askBefore, alwaysAllowed: allowed, status: deps.status, signal: deps.signal });
         parts.push(r.context); out.usedConnectors = true; handled = true;
         if (r.answer && (r.declined || r.asked)) out.directAnswer = r.answer;
       }
       if (!handled) {
-        const r = await runToolLoop(text, history, cm.getState().tools, { complete: deps.complete, execute: (name, args) => cm.call(name, args), approve: deps.approve, askBefore: cm.getSettings().askBefore, alwaysAllowed: allowed, onStatus: deps.status, signal: deps.signal }, 8, connectedAppNames(cm.getState()));
+        const r = await runToolLoop(taskText, history, cm.getState().tools, { complete: deps.complete, execute: (name, args) => cm.call(name, args), approve: deps.approve, askBefore: cm.getSettings().askBefore, alwaysAllowed: allowed, onStatus: deps.status, signal: deps.signal }, 8, connectedAppNames(cm.getState()));
         const ctx = loopContext(r);
         if (ctx) { parts.push(ctx); out.usedConnectors = true; }
       }

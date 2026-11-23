@@ -1,0 +1,341 @@
+{
+ "note": "Written after the rules were tuned on routing-cases.json; never tune against these without adding fresh cases.",
+ "connectedApps": [
+  "agent_mail",
+  "amazon",
+  "brave_search",
+  "canva",
+  "cloudflare",
+  "dropbox",
+  "excel",
+  "figma",
+  "github",
+  "gmail",
+  "google_analytics",
+  "google_search_console",
+  "googlecalendar",
+  "googledocs",
+  "googledrive",
+  "googlemeet",
+  "googlesheets",
+  "googleslides",
+  "googletasks",
+  "gumroad",
+  "hugging_face",
+  "instagram",
+  "kaggle",
+  "linear",
+  "microsoft_word",
+  "notion",
+  "outlook",
+  "reddit",
+  "sentry",
+  "shotstack",
+  "supabase",
+  "vercel",
+  "youtube",
+  "zoom"
+ ],
+ "cases": [
+  {
+   "tag": "heldout-pos",
+   "text": "did I get anything from the bank",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "when's my next call",
+   "use": true,
+   "apps": [
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "what's the latest on the ULTRON repo",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "has the deploy finished",
+   "use": true,
+   "apps": [
+    "vercel"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "any crashes today",
+   "use": true,
+   "apps": [
+    "sentry"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "how's traffic this week",
+   "use": true,
+   "apps": [
+    "google_analytics"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "assign the payment bug to me",
+   "use": true,
+   "apps": [
+    "linear"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "what's hot on r/programming",
+   "use": true,
+   "apps": [
+    "reddit"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "how many subs did I gain",
+   "use": true,
+   "apps": [
+    "youtube"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "grab the invoice PDF from my inbox",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "write back to Dana and tell her yes",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "cancel tomorrow's standup",
+   "use": true,
+   "apps": [
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "what's due this week",
+   "use": true,
+   "apps": [
+    "googletasks"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "open a PR for the router changes",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "list my notion pages",
+   "use": true,
+   "apps": [
+    "notion"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "put the Q3 numbers in a new sheet",
+   "use": true,
+   "apps": [
+    "googlesheets"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "how did my last reel do",
+   "use": true,
+   "apps": [
+    "instagram"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "who emailed me today",
+   "use": true,
+   "apps": [
+    "gmail"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "download the latest release from my drive",
+   "use": true,
+   "apps": [
+    "googledrive"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "is my domain pointing right",
+   "use": true,
+   "apps": [
+    "cloudflare"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "what sold today",
+   "use": true,
+   "apps": [
+    "gumroad"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "merge the keys fix",
+   "use": true,
+   "apps": [
+    "github"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "dm Layla on instagram",
+   "use": true,
+   "apps": [
+    "instagram"
+   ]
+  },
+  {
+   "tag": "heldout-pos",
+   "text": "when is my dentist appointment",
+   "use": true,
+   "apps": [
+    "googlecalendar"
+   ]
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "can you explain what a webhook is",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "write me a short story about a robot",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "what are the benefits of trello over asana",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "how should I structure a pitch deck",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "what is the best time to post on instagram",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "give me a regex for emails",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "who wrote the Great Gatsby",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "what's 15% of 240",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "plan a three day trip to Istanbul",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "my favorite color is blue",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "the meeting went well lol",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "I need a better morning routine",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "send good vibes",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "convert 5 miles to km",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "how many days until christmas",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "do you know any good sheet music for beginners",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "what's the issue with this code",
+   "use": false,
+   "apps": []
+  },
+  {
+   "tag": "heldout-neg",
+   "text": "what's the weather like in Cairo",
+   "use": false,
+   "apps": []
+  }
+ ]
+}
