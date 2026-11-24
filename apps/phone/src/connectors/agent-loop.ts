@@ -13,7 +13,7 @@ export type ToolRun = { name: string; summary: string; ok: boolean; preview: str
 export type Approval = "once" | "always" | "deny";
 
 export type LoopDeps = {
-  complete: (messages: Msg[], maxTokens: number, signal?: AbortSignal) => Promise<string>;
+  complete: (messages: Msg[], maxTokens: number, signal?: AbortSignal, effort?: "light" | "deep") => Promise<string>;
   execute: (name: string, args: Record<string, unknown>) => Promise<{ ok: boolean; text: string }>;
   /** Called for actions that are not clearly read-only. Resolve "deny" to refuse. */
   approve?: (request: { tool: string; summary: string; args: Record<string, unknown> }) => Promise<Approval>;

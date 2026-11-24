@@ -22,7 +22,7 @@ export type ToolContext = { context: string; sources: Source[]; usedWeb: boolean
 export type ChatToolsDeps = {
   http: Http; parse: Parse; renderer?: Renderer | null;
   composio?: ComposioManager | null;
-  complete: (messages: Msg[], maxTokens: number, signal?: AbortSignal) => Promise<string>;
+  complete: (messages: Msg[], maxTokens: number, signal?: AbortSignal, effort?: "light" | "deep") => Promise<string>;
   approve: (request: { tool: string; summary: string; args: Record<string, unknown> }) => Promise<Approval>;
   status: (label: string) => void;
   signal?: AbortSignal;
@@ -116,7 +116,7 @@ export async function gatherToolContext(text: string, history: Msg[], deps: Chat
         if (fp) { out.directAnswer = fp.answer; out.usedConnectors = true; handled = true; parts.push(`\n\n[Connected apps: answered directly by the app from the owner's ${fp.toolkit} just now.]`); }
       }
       if (!handled && rich && cm.getState().tools.some((t) => /^COMPOSIO_SEARCH_TOOLS$/i.test(t.name))) {
-        const r = await runComposioTask(taskText, history, { composio: cm, complete: deps.complete, approve: deps.approve, askBefore: cm.getSettings().askBefore, alwaysAllowed: allowed, status: deps.status, signal: deps.signal });
+        const r = await runComposioTask(taskText, history, { composio: cm, complete: deps.complete, approve: deps.approve, askBefore: cm.getSettings().askBefore, alwaysAllowed: allowed, status: deps.status, signal: deps.signal, apps: { pointed: route.mode === "mention" ? route.apps : [], likely: route.mode === "mention" ? [] : route.apps, connected: connectedAppNames(cm.getState()) } });
         parts.push(r.context); out.usedConnectors = true; handled = true;
         if (r.answer && (r.declined || r.asked)) out.directAnswer = r.answer;
       }

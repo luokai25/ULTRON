@@ -4492,7 +4492,7 @@ const composioSecrets: SecretStore = Capacitor.getPlatform() === "android"
 // The built-in key comes from the build (a GitHub Actions secret, like the bundled provider keys). It is never committed to the repo.
 const composioManager = new ComposioManager({ http: toolHttp, secrets: composioSecrets, kv: localStorage, builtInKey: typeof import.meta.env.VITE_COMPOSIO_CONSUMER_KEY === "string" ? import.meta.env.VITE_COMPOSIO_CONSUMER_KEY : "" });
 const toolCompleter = createCompleter({ kind: "auto" }, sharedLocalRoute);
-const toolComplete = (messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, maxTokens: number, signal?: AbortSignal): Promise<string> => toolCompleter.complete(messages, { maxTokens, signal });
+const toolComplete = (messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, maxTokens: number, signal?: AbortSignal, effort?: "light" | "deep"): Promise<string> => toolCompleter.complete(messages, { maxTokens, signal, effort });
 const webRenderer = nativeRenderer();
 async function checkConnectedAppsWithUltron(): Promise<string> {
   await composioManager.sync("check");

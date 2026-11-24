@@ -6,6 +6,7 @@
 | [Local-only migration](LOCAL_ONLY_MIGRATION.md) | What moved on-device, the free-tier router and plugin design |
 | [Screen coverage](ULTRON-SCREEN-COVERAGE.md) | Canonical client screen and state inventory |
 | [Connector routing](ULTRON-ROUTING.md) | How Ultron decides when to use your apps: @mentions, rules, model, and the benchmark |
+| [Tool agent](ULTRON-TOOL-AGENT.md) | How Ultron finds, checks and runs any tool of a connected app, and which model does each step |
 | [Prometheus runtime](ultron-prometheus-runtime.md) | Background reasoning, memory and self-improvement loop |
 | [Constitution](constitution/IMPLEMENTATION_MAP.md) | Mapping the owner-provided ULTRON source to implementation |
 | [Mobile inference](airllm-mobile-engine.md) | Low-memory local model execution design |

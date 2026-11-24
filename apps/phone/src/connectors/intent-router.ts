@@ -225,7 +225,7 @@ export function routeIntent(text: string, connected: readonly string[] = []): Ro
 
 /* ---------- model stage ---------- */
 
-export type Complete = (messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, maxTokens: number, signal?: AbortSignal) => Promise<string>;
+export type Complete = (messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, maxTokens: number, signal?: AbortSignal, effort?: "light" | "deep") => Promise<string>;
 
 export function classifierPrompt(text: string, connected: readonly string[]): string {
   const list = connected.length ? connected.map((a) => `${a} (${prettyAppName(a)})`).join(", ") : "none listed";
@@ -252,7 +252,7 @@ export async function routeWithModel(text: string, connected: readonly string[],
   const rules = routeIntent(text, connected);
   if (rules.mode !== "defer") return rules;
   try {
-    const reply = await complete([{ role: "system", content: "You output only JSON." }, { role: "user", content: classifierPrompt(rules.task, connected) }], 120, signal);
+    const reply = await complete([{ role: "system", content: "You output only JSON." }, { role: "user", content: classifierPrompt(rules.task, connected) }], 120, signal, "light");
     const verdict = parseClassifier(reply, connected);
     if (verdict) return { ...rules, use: verdict.use, mode: "rules", apps: verdict.apps.length ? verdict.apps : rules.apps, confidence: 0.7, reason: verdict.use ? "Checked with the model: needs your apps." : "Checked with the model: answer directly." };
   } catch (e) { if (e instanceof DOMException && e.name === "AbortError") throw e; }

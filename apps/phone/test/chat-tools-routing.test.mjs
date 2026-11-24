@@ -46,3 +46,18 @@ test("routing by intent: a borderline message asks the model once, and 'no tools
   const r = await ct.gatherToolContext("I need a better morning routine", [], base({ composio, complete: async (m) => { asked++; return '{"tools": false, "apps": [], "why": "chit chat"}'; } }));
   assert.equal(asked, 1); assert.equal(ran, 0); assert.equal(r.usedConnectors, false);
 });
+
+test("the router's app hints reach the tool agent, and deep work is marked as deep", async () => {
+  const efforts = []; const searches = [];
+  const composio = {
+    getSettings: () => ({ enabled: true, askBefore: true, allowedTools: [], webInChat: true }), updateSettings() {}, ensureFresh: async () => {},
+    getState: () => ({ status: "connected", groups: [], connections: null, connectedApps: ["gmail", "github"], tools: [{ name: "COMPOSIO_SEARCH_TOOLS", description: "s", inputSchema: {} }] }),
+    accountsFor: () => [], defaultAccount: () => null, connectApp: async () => ({ ok: false }),
+    callJson: async (name, args) => { if (name === "COMPOSIO_SEARCH_TOOLS") searches.push(args.queries.map((q) => q.use_case)); return { ok: true, json: { data: { results: [{ primary_tool_slugs: ["GITHUB_LIST_COMMITS"] }], toolkit_connection_statuses: [{ toolkit: "github", has_active_connection: true }], tool_schemas: { GITHUB_LIST_COMMITS: { toolkit: "GITHUB", description: "Lists commits.", input_schema: { properties: { repo: { type: "string" } } }, hasFullSchema: true } }, session: { id: "s" } } }, text: "" }; },
+    call: async () => ({ ok: true, text: "ok" }),
+  };
+  const r = await ct.gatherToolContext("@github what changed last week", [], base({ composio, complete: async (m, _n, _s, effort) => { efforts.push(effort); return JSON.stringify({ calls: [], ask: "Which repo?" }); } }));
+  assert.equal(r.usedConnectors, true);
+  assert.deepEqual(searches[0], ["what changed last week", "what changed last week (in GitHub)"]);
+  assert.deepEqual(efforts, ["deep"]);
+});
