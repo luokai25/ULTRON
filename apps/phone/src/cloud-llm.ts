@@ -5,6 +5,7 @@ import { automaticModels, catalogModel, freeModel } from "./model-eligibility";
 import { limitsFor } from "./free-tier-limits";
 import { FREE_CATALOG_SOURCE } from "./free-catalog.generated";
 import { usageLedger } from "./usage-ledger";
+import { catalogScore, effectiveComplexity, type Effort } from "./model-effort";
 import {
   getLocalProviderKeyCandidates,
   listLocalProviderKeys,
@@ -188,6 +189,7 @@ export async function streamUltronBrainChat(
   signal: AbortSignal,
   onToken: (token: string | null) => void,
   provider?: CloudProviderId,
+  effort?: Effort,
 ): Promise<string> {
   const separator = modelId.indexOf("::");
   const qualifiedProvider = separator > 0 ? modelId.slice(0, separator) as CloudProviderId : undefined;
@@ -200,7 +202,7 @@ export async function streamUltronBrainChat(
   if (!safeMessages.length || !safeMessages.some((message) => message.role === "user")) {
     throw new Error("ULTRON needs a non-empty user message before starting a cloud chat.");
   }
-  const complexity = taskComplexity(safeMessages);
+  const complexity = effectiveComplexity(taskComplexity(safeMessages), effort);
   const providers = selectedProvider ? [selectedProvider] : [...SUPPORTED_PROVIDERS];
   const keyCounts = { connected: 0, models: 0 };
   const ineligible = new Set<string>();
@@ -216,7 +218,7 @@ export async function streamUltronBrainChat(
         const used = usageLedger.utilization(`${key.id}|${model}`, limitsFor(candidateProvider, model));
         const listed = catalogModel(candidateProvider, model);
         // A catalogue rank is a published ordering of free models; it outweighs name heuristics when present.
-        const score = (listed ? 600 + listed.rank * 45 : modelCapabilityScore(model, complexity)) + (freeModel(candidateProvider, model) ? 5000 : 0);
+        const score = (listed ? catalogScore(listed.rank, effort) : modelCapabilityScore(model, complexity)) + (freeModel(candidateProvider, model) ? 5000 : 0);
         return { provider: candidateProvider, key, model, used, score };
       });
     });

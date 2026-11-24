@@ -28,12 +28,12 @@ export function describeChoice(choice: ModelChoice): string {
 }
 
 export function createCompleter(choice: ModelChoice, local: LocalRoute): { complete: Completer; concurrency: number } {
-  const viaCloud = async (modelId: string, messages: Msg[], maxTokens: number, signal: AbortSignal | undefined, onToken?: (t: string) => void): Promise<string> => {
+  const viaCloud = async (modelId: string, messages: Msg[], maxTokens: number, signal: AbortSignal | undefined, onToken?: (t: string) => void, effort?: "light" | "deep"): Promise<string> => {
     let streamed = "";
     const content = await streamUltronBrainChat(modelId, messages, maxTokens, signal ?? new AbortController().signal, (token) => {
       if (token === null) { streamed = ""; return; }
       streamed += token; onToken?.(token);
-    });
+    }, undefined, effort);
     return content || streamed;
   };
   const viaLocal = (messages: Msg[], maxTokens: number, onToken?: (t: string) => void): Promise<string> => local.generate(messages, Math.min(maxTokens, 1536), (t) => onToken?.(t));
@@ -41,11 +41,11 @@ export function createCompleter(choice: ModelChoice, local: LocalRoute): { compl
   if (choice.kind === "local") {
     return { concurrency: 1, complete: async (messages, o) => { if (!local.ready()) throw new Error("The on-device model is not loaded. Open Local models and load one."); return viaLocal(messages, o.maxTokens, o.onToken); } };
   }
-  if (choice.kind === "cloud") return { concurrency: 2, complete: (messages, o) => viaCloud(choice.id, messages, o.maxTokens, o.signal, o.onToken) };
+  if (choice.kind === "cloud") return { concurrency: 2, complete: (messages, o) => viaCloud(choice.id, messages, o.maxTokens, o.signal, o.onToken, o.effort) };
   return {
     concurrency: 2,
     complete: async (messages, o) => {
-      try { return await viaCloud("", messages, o.maxTokens, o.signal, o.onToken); }
+      try { return await viaCloud("", messages, o.maxTokens, o.signal, o.onToken, o.effort); }
       catch (error) {
         if (o.signal?.aborted) throw error;
         if (local.ready()) return viaLocal(messages, o.maxTokens, o.onToken);

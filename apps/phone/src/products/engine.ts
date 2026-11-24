@@ -5,7 +5,7 @@ import { overallScore, rankPockets, isSafeCategory } from "./scoring";
 import { DEFAULT_CUSTOM, DEPTH_SPEC, estimatePages, FONT_ALLOWLIST, WORDS_PER_PAGE, type Block, type Brand, type Charter, type Direction, type EbookSummary, type Outline, type Pocket, type Product, type ProductMode, type Section, type SectionKind, type StoreCopy, type Vtm } from "./types";
 
 export type Msg = { role: "system" | "user" | "assistant"; content: string };
-export type CompleteOptions = { maxTokens: number; signal?: AbortSignal; onToken?: (token: string) => void };
+export type CompleteOptions = { maxTokens: number; signal?: AbortSignal; onToken?: (token: string) => void; effort?: "light" | "deep" };
 export type Completer = (messages: Msg[], options: CompleteOptions) => Promise<string>;
 
 export type Progress =
