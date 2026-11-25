@@ -61,3 +61,33 @@ test("the router's app hints reach the tool agent, and deep work is marked as de
   assert.deepEqual(searches[0], ["what changed last week", "what changed last week (in GitHub)"]);
   assert.deepEqual(efforts, ["deep"]);
 });
+
+test("'play my song from Dropbox' finds the file, gets a link, and the chat shows a player instead of a link", async () => {
+  const meta = (o) => ({ id: "id:-I0_Bq", name: "Night_Drive.mp3", path_display: "/Ultron/Music/Night_Drive.mp3", path_lower: "/ultron/music/night_drive.mp3", size: 4200000, ...o });
+  const wrap = (slug, data) => ({ json: { data: { results: [{ response: { successful: true, data }, tool_slug: slug, index: 0 }] } } });
+  const schemas = { DROPBOX_SEARCH_FILE_OR_FOLDER: { toolkit: "DROPBOX", description: "Search files.", input_schema: { required: ["query"], properties: { query: { type: "string" } } }, hasFullSchema: true }, DROPBOX_GET_TEMPORARY_LINK: { toolkit: "DROPBOX", description: "Get a temporary link.", input_schema: { required: ["path"], properties: { path: { type: "string" } } }, hasFullSchema: true } };
+  const calls = [];
+  const composio = {
+    getSettings: () => ({ enabled: true, askBefore: true, allowedTools: [], webInChat: true }), updateSettings() {}, ensureFresh: async () => {},
+    getState: () => ({ status: "connected", groups: [], connections: null, connectedApps: ["dropbox", "gmail"], tools: [{ name: "COMPOSIO_SEARCH_TOOLS", description: "", inputSchema: {} }] }),
+    accountsFor: () => [], defaultAccount: () => null, connectApp: async () => ({ ok: true }), call: async () => ({ ok: true, text: "" }),
+    callJson: async (name, args) => {
+      calls.push([name, args]);
+      if (name === "COMPOSIO_SEARCH_TOOLS") return { ok: true, text: "", json: { data: { results: [{ primary_tool_slugs: ["DROPBOX_SEARCH_FILE_OR_FOLDER", "DROPBOX_GET_TEMPORARY_LINK"] }], toolkit_connection_statuses: [{ toolkit: "dropbox", has_active_connection: true }], tool_schemas: schemas, session: { id: "s1" } } } };
+      const slug = args.tools[0].tool_slug;
+      const r = slug === "DROPBOX_SEARCH_FILE_OR_FOLDER" ? wrap(slug, { matches: [{ metadata: { ".tag": "file", ...meta({}) } }] }) : wrap(slug, { link: "https://uc1.dl.dropboxusercontent.com/cd/0/get/xyz/file", metadata: meta({}) });
+      return { ok: true, text: "", json: r.json };
+    },
+  };
+  const replies = [
+    JSON.stringify({ calls: [{ tool_slug: "DROPBOX_SEARCH_FILE_OR_FOLDER", arguments: { query: "Night Drive" } }], more: true }),
+    JSON.stringify({ calls: [{ tool_slug: "DROPBOX_GET_TEMPORARY_LINK", arguments: { path: "/Ultron/Music/Night_Drive.mp3" } }] }),
+  ];
+  const seen = []; let i = 0; let approvals = 0;
+  const r = await ct.gatherToolContext("play my song Night Drive from Dropbox", [], base({ composio, approve: async () => { approvals++; return "once"; }, complete: async (m) => { seen.push(m.at(-1).content); return replies[Math.min(i++, 1)]; } }));
+  assert.equal(r.usedConnectors, true); assert.equal(approvals, 0, "searching and getting a link only read, so nothing asks first");
+  assert.deepEqual(r.media, [{ id: "dropbox:id:-I0_Bq", kind: "audio", title: "Night Drive", mime: "audio/mpeg", remote: { provider: "dropbox", path: "/Ultron/Music/Night_Drive.mp3", size: 4200000 } }]);
+  assert.match(r.context, /showing "Night Drive" in the chat as a player/); assert.match(r.context, /do not print any link/);
+  assert.match(seen[0], /Dropbox: the owner's folder for Ultron is \/Ultron \(Music, Videos, Images, Documents, Files\)/);
+  assert.match(seen[1], /Results of the earlier steps/); assert.match(seen[1], /Night_Drive\.mp3/);
+});

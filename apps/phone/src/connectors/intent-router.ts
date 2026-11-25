@@ -131,7 +131,7 @@ const PROFILES: Record<string, AppProfile> = {
   notion: { aliases: ["notion"], cues: [[/\b(?:my )?(?:notes|wiki|roadmap)\b/i, 2]] },
   googledrive: { aliases: ["google drive", "gdrive", "drive"], cues: [
     [/\bmy (?:storage|files?|folders?|documents?)\b/i, 2.5], [/\bupload (?:this|that|it|the|these)\b/i, 2.5], [/\bshare (?:the|this|my|that) (?:\w+ )?(?:report|file|doc|document|deck|folder|sheet|contract|pdf)\b/i, 2.5], [/\b(?:contract|pdf|pitch deck)\b/i, 1.5] ] },
-  dropbox: { aliases: ["dropbox"], cues: [] },
+  dropbox: { aliases: ["dropbox"], cues: [[/\b(?:play|put on|queue up)\b.{0,50}\b(?:song|music|track|album|playlist|mp3)\b/i, 2.5], [/\b(?:save|store|keep|upload|put)\b.{0,40}\b(?:in|to|on) (?:your |ultron'?s? |my )?(?:storage|cloud|dropbox)\b/i, 3], [/\bultron'?s? (?:storage|files|folder|music)\b/i, 3]] },
   googledocs: { aliases: ["google docs", "gdoc", "gdocs"], cues: [[/\b(?:create|make|start|open|new|write) (?:me )?(?:a |an |the )?(?:new )?(?:google )?(?:doc|document)\b/i, 2.5]] },
   googlesheets: { aliases: ["google sheets", "gsheet", "gsheets", "spreadsheet"], cues: [[/\b(?:spreadsheet|sheet(?! music)|rows?|cells?)\b/i, 2], [/\b(?:budget|numbers|figures)\b/i, 1]] },
   excel: { aliases: ["excel", "xlsx"], cues: [] },

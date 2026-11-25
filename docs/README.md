@@ -5,6 +5,7 @@
 | [Architecture](architecture.md) | How the on-device app is put together |
 | [Local-only migration](LOCAL_ONLY_MIGRATION.md) | What moved on-device, the free-tier router and plugin design |
 | [Screen coverage](ULTRON-SCREEN-COVERAGE.md) | Canonical client screen and state inventory |
+| [Dropbox storage and the chat player](ULTRON-STORAGE.md) | Where Ultron keeps files, how songs and videos play in chat, and how to download or save |
 | [Connector routing](ULTRON-ROUTING.md) | How Ultron decides when to use your apps: @mentions, rules, model, and the benchmark |
 | [Tool agent](ULTRON-TOOL-AGENT.md) | How Ultron finds, checks and runs any tool of a connected app, and which model does each step |
 | [Prometheus runtime](ultron-prometheus-runtime.md) | Background reasoning, memory and self-improvement loop |

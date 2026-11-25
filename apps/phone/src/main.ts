@@ -45,8 +45,10 @@ import { deleteDurableRecord, listDurableRecords, putDurableRecord, putDurableRe
 import { detectProductIntent } from "./products/intent";
 import { mountDownloadsSettings, saveToDevice, toast } from "./device-files";
 import { splitThinking, stripThinking, visibleReply } from "./think-filter";
-import { mediaCards, mediaSkeleton, setSkeletonLabel, thoughtDetails, type MediaItem } from "./chat-extras";
-import { detectMediaIntent, fallbackScenes, generateImage, parseScenes, type MediaIntent, type Scene } from "./media-gen";
+import { mediaCards, mediaSkeleton, setMediaHandlers, setSkeletonLabel, thoughtDetails, type MediaItem } from "./chat-extras";
+import { DropboxStorage } from "./connectors/dropbox-storage";
+import { b64ToBytes, detectMediaIntent, fallbackScenes, generateImage, parseScenes, type MediaIntent, type Scene } from "./media-gen";
+import { downloadName } from "./media-names";
 import { makeSlideshowVideo } from "./video-maker";
 import { extractJson } from "./products/json";
 import { createHttp } from "./products/http";
@@ -3025,6 +3027,7 @@ async function submitTurn(raw: string): Promise<void> {
   }
   message.content = result.content;
   if (thoughtText) message.thought = thoughtText;
+  if (toolContext.media?.length) message.media = toolContext.media;
   if (result.tool_calls?.length) message.tools = result.tool_calls.map((t) => ({ connector: t.connector, action: t.action, ok: t.ok, latency_ms: t.latency_ms, detail: t.detail, approval_required: t.approval_required, approval_id: t.approval_id, artifact: t.artifact }));
   convo.messages.push(message);
   convo.updatedAt = Date.now();
@@ -4491,6 +4494,18 @@ const composioSecrets: SecretStore = Capacitor.getPlatform() === "android"
   : { get: async (k) => localStorage.getItem("dev:" + k), set: async (k, v) => localStorage.setItem("dev:" + k, v), remove: async (k) => localStorage.removeItem("dev:" + k) };
 // The built-in key comes from the build (a GitHub Actions secret, like the bundled provider keys). It is never committed to the repo.
 const composioManager = new ComposioManager({ http: toolHttp, secrets: composioSecrets, kv: localStorage, builtInKey: typeof import.meta.env.VITE_COMPOSIO_CONSUMER_KEY === "string" ? import.meta.env.VITE_COMPOSIO_CONSUMER_KEY : "" });
+// Dropbox is Ultron's own storage (through the owner's Composio connection). Cards ask for a fresh link each time they are shown.
+const dropboxStorage = new DropboxStorage((name, args) => composioManager.callJson(name, args));
+setMediaHandlers({
+  resolve: async (item) => (await dropboxStorage.tempLink((item.remote as { path: string }).path)).url,
+  fetchBlob: async (item) => {
+    const link = await dropboxStorage.tempLink((item.remote as { path: string }).path);
+    const got = await toolHttp.bytes(link.url, { timeoutMs: 180_000 });
+    if (got.status >= 400 || !got.base64) throw new Error("Dropbox did not send the file. Try again in a moment.");
+    return new Blob([b64ToBytes(got.base64) as BlobPart], { type: item.mime || got.mime });
+  },
+  saveToCloud: async (item, blob) => (await dropboxStorage.uploadBytes(new Uint8Array(await blob.arrayBuffer()), downloadName(item), item.mime)).path,
+});
 const toolCompleter = createCompleter({ kind: "auto" }, sharedLocalRoute);
 const toolComplete = (messages: Array<{ role: "system" | "user" | "assistant"; content: string }>, maxTokens: number, signal?: AbortSignal, effort?: "light" | "deep"): Promise<string> => toolCompleter.complete(messages, { maxTokens, signal, effort });
 const webRenderer = nativeRenderer();

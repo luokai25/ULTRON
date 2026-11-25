@@ -581,7 +581,8 @@ progress { width:100%; accent-color:var(--accent); }
 .media-frame{min-height:120px;display:grid;place-items:center;background:#0b0e13}
 .media-frame img,.media-frame video{display:block;width:100%;max-height:70vh;object-fit:contain}
 .media-caption{padding:9px 12px 4px;font-size:12px;color:#98a2b1;overflow-wrap:anywhere}
-.media-actions{display:flex;gap:8px;padding:6px 10px 10px}
+.media-audio .media-frame{min-height:0;padding:14px 12px 4px;background:transparent;place-items:stretch}.media-audio audio{width:100%;height:44px}.media-where{display:inline-block;margin-left:4px;padding:1px 7px;border:1px solid var(--hairline);border-radius:999px;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:#7f8a99}.media-remote .media-frame:not(:has(audio,video,img)){padding:18px 14px;font-size:12px;color:#98a2b1;text-align:center}
+.media-actions{display:flex;gap:8px;padding:6px 10px 10px}.media-actions{flex-wrap:wrap}
 .media-actions button{min-height:36px;padding:0 14px;border:1px solid var(--hairline);border-radius:10px;background:rgba(255,255,255,.05);color:var(--ink);font-size:12px}
 .media-skeleton{margin:10px 0}.media-skeleton .media-shimmer{min-height:180px}
 .media-shimmer{background:linear-gradient(100deg,rgba(255,255,255,.04) 30%,rgba(255,255,255,.12) 50%,rgba(255,255,255,.04) 70%);background-size:220% 100%;animation:mediaShimmer 1.3s linear infinite}

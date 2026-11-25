@@ -3,6 +3,7 @@ import { Page, type Parse } from "../web/page";
 import type { Renderer } from "../web/render";
 import { loopContext, runToolLoop, type Approval, type Msg } from "./agent-loop";
 import { prettyAppName, routeWithModel, type RouteDecision } from "./intent-router";
+import { mediaFromResults, type DropboxMedia } from "./dropbox-storage";
 import type { ComposioManager } from "./composio";
 import { runComposioTask } from "./composio-agent";
 import { detectFastIntent, runFastPath } from "./fast-paths";
@@ -17,7 +18,7 @@ import { researchContext, webResearch } from "./web-research";
  */
 
 export type Source = { n: number; title: string; url: string };
-export type ToolContext = { context: string; sources: Source[]; usedWeb: boolean; usedConnectors: boolean; /** A finished answer written by the app itself; when present the chat model is not needed. */ directAnswer?: string };
+export type ToolContext = { context: string; sources: Source[]; usedWeb: boolean; usedConnectors: boolean; /** A finished answer written by the app itself; when present the chat model is not needed. */ directAnswer?: string; /** Files the tools found that the chat should show as a player or picture, not as a link. */ media?: DropboxMedia[] };
 
 export type ChatToolsDeps = {
   http: Http; parse: Parse; renderer?: Renderer | null;
@@ -118,6 +119,8 @@ export async function gatherToolContext(text: string, history: Msg[], deps: Chat
       if (!handled && rich && cm.getState().tools.some((t) => /^COMPOSIO_SEARCH_TOOLS$/i.test(t.name))) {
         const r = await runComposioTask(taskText, history, { composio: cm, complete: deps.complete, approve: deps.approve, askBefore: cm.getSettings().askBefore, alwaysAllowed: allowed, status: deps.status, signal: deps.signal, apps: { pointed: route.mode === "mention" ? route.apps : [], likely: route.mode === "mention" ? [] : route.apps, connected: connectedAppNames(cm.getState()) } });
         parts.push(r.context); out.usedConnectors = true; handled = true;
+        const media = mediaFromResults(r.results ?? []);
+        if (media.length) { out.media = media; parts.push(`[The app is showing ${media.map((m) => `"${m.title}"`).join(", ")} in the chat as a ${media.every((m) => m.kind === "audio") ? "player" : "viewer"} with a download button. Say so in one short sentence and do not print any link.]`); }
         if (r.answer && (r.declined || r.asked)) out.directAnswer = r.answer;
       }
       if (!handled) {
