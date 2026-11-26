@@ -83,8 +83,10 @@ test("Automatic ranks by load, rests keys past their cap, and counts every attem
   const cloud = src("cloud-llm.ts");
   assert.match(cloud, /usageLedger\.utilization\(`\$\{key\.id\}\|\$\{model\}`, limitsFor\(candidateProvider, model\)\)/, "load is tracked per key and model against that model's own caps");
   assert.match(cloud, /Number\(a\.used >= 1\) - Number\(b\.used >= 1\)/, "exhausted keys go to the back");
-  assert.match(cloud, /usageLedger\.noteRequest\(`\$\{candidate\.key\.id\}\|\$\{candidate\.model\}`\)/);
-  assert.match(cloud, /usageLedger\.noteTokens\(`\$\{candidate\.key\.id\}\|\$\{candidate\.model\}`/);
+  const loop = src("candidate-loop.ts"); // the attempt loop lives here; its behaviour is tested in candidate-loop.test.mjs
+  assert.match(loop, /deps\.noteRequest\(`\$\{candidate\.key\.id\}\|\$\{candidate\.model\}`\)/);
+  assert.match(loop, /deps\.noteTokens\(`\$\{candidate\.key\.id\}\|\$\{candidate\.model\}`/);
+  assert.match(cloud, /noteRequest: \(id\) => usageLedger\.noteRequest\(id\), noteTokens: \(id, tokens\) => usageLedger\.noteTokens\(id, tokens\)/, "the loop's counters are the real usage ledger");
 });
 
 test("GitHub Models is gone everywhere it was wired in", () => {

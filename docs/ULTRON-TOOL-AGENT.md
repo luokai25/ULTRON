@@ -30,3 +30,14 @@ Automatic mode (`cloud-llm.ts`) ranks the free models the owner has keys for. St
 The catalogue's `rank` is an *intelligence rank*: 1 is the smartest. Upstream scores `tier - sqrt(rank)`, so a lower rank must score
 higher. Until this change the router added `rank * 45`, so for every catalogued model it preferred the weaker one first (for example
 an 8B model before a 70B on Groq). `test/model-effort.test.mjs` pins the correct direction against the real catalogue.
+
+## When a model answers with nothing
+
+A model can reply with no visible text: a reasoning model that spends its whole token budget thinking, or a filtered reply. The
+attempt loop (`apps/phone/src/candidate-loop.ts`) treats that as "try the next model", not as the end of the request. It leaves no
+lasting mark on the key or the model (a blank reply says little about either), clears any whitespace already shown, and if every
+model is blank the error names them ("No text came back from …") so the cause is visible. Network errors, rate limits, bad keys and
+the rule that an answer is never spliced after text was shown are unchanged and pinned by `test/candidate-loop.test.mjs`.
+
+Not done: each new request still tries the strongest model first, so a model that is blank at small token budgets costs one wasted
+call per request until it is ranked down for that budget.

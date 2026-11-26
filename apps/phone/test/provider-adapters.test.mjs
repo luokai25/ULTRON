@@ -201,5 +201,8 @@ test("the chat path no longer depends on any hosted ULTRON gateway", () => {
   assert.match(cloud, /defaultProviderTransport/);
   assert.doesNotMatch(cloud, /vercel|ultron-brain|API_PATH|invokeVercelBrain|VITE_ULTRON_BRAIN_URL/i);
   assert.doesNotMatch(cloud, /@supabase|ULTRON_SUPABASE|functions\/v1/);
-  assert.match(cloud, /if \(emitted\) throw failed/, "a provider failure after tokens were shown must not splice in another provider's answer");
+  const loop = readFileSync(new URL("../src/candidate-loop.ts", import.meta.url), "utf8"); // the attempt loop moved here
+  assert.match(cloud, /runCandidates\(/);
+  assert.doesNotMatch(loop, /vercel|ultron-brain|API_PATH|invokeVercelBrain|VITE_ULTRON_BRAIN_URL|@supabase|ULTRON_SUPABASE|functions\/v1/i);
+  assert.match(loop, /if \(emitted\) throw failed/, "a provider failure after tokens were shown must not splice in another provider's answer");
 });

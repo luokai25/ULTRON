@@ -5,6 +5,7 @@ import { automaticModels, catalogModel, freeModel } from "./model-eligibility";
 import { limitsFor } from "./free-tier-limits";
 import { FREE_CATALOG_SOURCE } from "./free-catalog.generated";
 import { usageLedger } from "./usage-ledger";
+import { runCandidates } from "./candidate-loop";
 import { catalogScore, effectiveComplexity, type Effort } from "./model-effort";
 import {
   getLocalProviderKeyCandidates,
@@ -237,8 +238,6 @@ export async function streamUltronBrainChat(
         ? "No working provider key is available. Add a key in LLM API Keys (a rate-limited key becomes usable again after its cooldown), or choose a local model."
         : `${[...ineligible].join(" and ")} ${ineligible.size > 1 ? "keys are" : "key is"} saved, but none of ${ineligible.size > 1 ? "their" : "its"} models are on ULTRON's free-tier list, so Automatic skips ${ineligible.size > 1 ? "them" : "it"} to avoid charges. Pick a model by hand in the model picker, or add a key for another free provider.`);
   }
-  const skippedKeys = new Set<string>();
-
   const controller = new AbortController();
   const abortFromCaller = (): void => controller.abort();
   if (signal.aborted) controller.abort();
@@ -249,54 +248,15 @@ export async function streamUltronBrainChat(
     controller.abort(new DOMException("Provider request timed out.", "TimeoutError"));
   }, REQUEST_DEADLINE_MS);
   const transport = defaultProviderTransport();
-  let lastError: Error | null = null;
   try {
-    for (const candidate of candidates) {
-      if (signal.aborted) throw new DOMException("Generation stopped", "AbortError");
-      if (controller.signal.aborted) break;
-      if (skippedKeys.has(candidate.key.id)) continue;
-      let emitted = false;
-      let content = "";
-      usageLedger.noteRequest(`${candidate.key.id}|${candidate.model}`);
-      try {
-        content = await streamProviderChat(
-          candidate.provider, candidate.key.apiKey,
-          { model: candidate.model, messages: safeMessages, maxTokens, temperature: 0.3 },
-          transport, (token) => { emitted = true; onToken(token); }, controller.signal,
-        );
-      } catch (error) {
-        if (signal.aborted) throw new DOMException("Generation stopped", "AbortError");
-        if (controller.signal.aborted) break;
-        if (error instanceof ProviderHttpError) {
-          const message = error.message;
-          lastError = new Error(`${PROVIDERS[candidate.provider] ?? candidate.provider} HTTP ${error.status}: ${message.slice(0, 400)}`);
-          const status = error.status;
-          const outcome = status === 401 ? "invalid"
-            : status === 403 ? (/model|only available/i.test(message) ? "model_error" : "expired")
-            : status === 404 ? "model_error"
-            : status === 429 ? "rate_limited"
-            : status >= 500 || status === 408 ? "transient" : null;
-          if (outcome) {
-            await recordLocalProviderKeyResult(candidate.provider, candidate.key.id, {
-              outcome, error: message, retryAfterMs: error.retryAfterMs ?? 900_000, model: candidate.model,
-            }).catch(() => undefined);
-          }
-          if (outcome === "invalid" || outcome === "expired" || outcome === "rate_limited") skippedKeys.add(candidate.key.id);
-          if (![401, 403, 404, 429, 500, 502, 503, 504].includes(status)) throw lastError;
-          continue;
-        }
-        const failed = error instanceof Error ? error : new Error("The provider request failed.");
-        // Never splice another provider's answer into text the user has already seen.
-        if (emitted) throw failed;
-        lastError = failed;
-        await recordLocalProviderKeyResult(candidate.provider, candidate.key.id, { outcome: "transient", error: failed.message }).catch(() => undefined);
-        continue;
-      }
-      if (!content.trim()) throw new Error("The provider completed without returning any text.");
-      await recordLocalProviderKeyResult(candidate.provider, candidate.key.id, { outcome: "success", tokens: Math.max(1, Math.ceil(content.length / 4)) }).catch(() => undefined);
-      usageLedger.noteTokens(`${candidate.key.id}|${candidate.model}`, Math.ceil((safeMessages.reduce((sum, m) => sum + m.content.length, 0) + content.length) / 4));
-      return content.trim();
-    }
+    const outcome = await runCandidates(candidates, { signal, controller, onToken, promptChars: safeMessages.reduce((sum, m) => sum + m.content.length, 0) }, {
+      stream: (candidate, emit, abort) => streamProviderChat(candidate.provider, candidate.key.apiKey, { model: candidate.model, messages: safeMessages, maxTokens, temperature: 0.3 }, transport, emit, abort),
+      record: (candidate, result) => recordLocalProviderKeyResult(candidate.provider, candidate.key.id, result),
+      noteRequest: (id) => usageLedger.noteRequest(id), noteTokens: (id, tokens) => usageLedger.noteTokens(id, tokens),
+      providerName: (provider) => PROVIDERS[provider as keyof typeof PROVIDERS] ?? provider,
+    });
+    if (outcome.content !== null) return outcome.content;
+    const lastError = outcome.lastError;
     if (timedOut) throw new Error(DEADLINE_MESSAGE);
     throw lastError ?? new Error("No provider key could complete this request.");
   } finally {
