@@ -1,0 +1,160 @@
+name: Android Compile Check
+
+# A fast check of the Android project: dependencies resolve, the Java compiles, and the merged manifest stays privacy-safe.
+# It builds no APK, runs no emulator and publishes nothing, so a broken Android change shows up in minutes instead of after the
+# full release build. It runs beside the release workflow on the same pushes.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/phone/**"
+      - ".github/workflows/android-compile-check.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-compile-check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20.11"
+  PNPM_VERSION: "9.12.0"
+  JAVA_VERSION: "17"
+  WORKDIR: apps/phone
+
+jobs:
+  compile:
+    name: Resolve, compile and audit the Android project
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # No lockfile is committed yet, so resolution is unpinned and a transient
+      # registry 404 on a freshly published tarball can fail the whole release.
+      # Retry the install rather than treating a CDN miss as a build failure.
+      - name: Install workspace
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if pnpm install --no-frozen-lockfile --fetch-retries=5 --fetch-retry-maxtimeout=60000; then
+              exit 0
+            fi
+            echo "::warning::pnpm install failed (attempt $attempt of 3), retrying in 20s"
+            sleep 20
+          done
+          echo "::error::pnpm install failed after 3 attempts"
+          exit 1
+
+      - name: Resolve version
+        id: version
+        run: |
+          set -euo pipefail
+          PKG_VERSION=$(node -p "require('./${{ env.WORKDIR }}/package.json').version")
+          VERSION="${{ inputs.version }}"
+          if [ -z "$VERSION" ]; then VERSION="$PKG_VERSION"; fi
+          # versionCode must increase monotonically for Android to accept an update.
+          VERSION_CODE=$(( 1000 + ${{ github.run_number }} ))
+          echo "name=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "tag=android-v${VERSION}-b${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "Building $VERSION (code $VERSION_CODE)"
+
+      - name: Build connector SDK
+        run: pnpm --filter @ultron/connectors build
+
+      - name: Build web assets
+        working-directory: ${{ env.WORKDIR }}
+        run: pnpm build
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # Gradle is installed by the action rather than through a committed
+      # gradle-wrapper.jar: the wrapper jar is a 63 KB binary, and the repository
+      # deliberately carries no opaque binaries. The version is pinned here and
+      # must stay in step with the AGP version in android/build.gradle (AGP 8.11.1
+      # requires Gradle 8.2+).
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      # `packages` must be explicit. The action's default is
+      # "tools platform-tools", and the legacy `tools` package no longer exists
+      # in Google's SDK repository - sdkmanager exits 1 with "Failed to find
+      # package 'tools'" and the whole job dies before Gradle ever runs.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install Android platform and build tools
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+          yes | sdkmanager --licenses > /dev/null || true
+
+      - name: Sync Capacitor
+        working-directory: ${{ env.WORKDIR }}
+        run: npx cap sync android
+
+      # The launcher icons and splash screens are generated, not committed, so
+      # the repository carries no opaque binaries. Regenerate them before Gradle
+      # resolves resources.
+      - name: Generate Android assets
+        working-directory: ${{ env.WORKDIR }}/android
+        run: |
+          set -euo pipefail
+          python3 -m pip install --quiet --disable-pip-version-check pillow
+          python3 tools/generate_assets.py
+
+      - name: Compile the debug build
+        working-directory: ${{ env.WORKDIR }}/android
+        run: |
+          set -euo pipefail
+          gradle :app:compileDebugJavaWithJavac --no-daemon --console=plain --stacktrace --max-workers=2 2>&1 | tee compile.log
+
+      - name: Verify privacy-safe merged Android manifest
+        working-directory: ${{ env.WORKDIR }}/android
+        shell: bash
+        run: |
+          set -euo pipefail
+          MANIFEST=$(find app/build/intermediates -type f -path '*merged_manifest*debug*/AndroidManifest.xml' -print -quit)
+          if [ -z "$MANIFEST" ]; then
+            echo "::error::Merged debug manifest was not found"
+            exit 1
+          fi
+          echo "Auditing $MANIFEST"
+          echo "Permissions declared:"; grep -o 'android.permission.[A-Z_]*' "$MANIFEST" | sort -u | sed 's/^/  /'
+          if grep -E 'android.permission.(READ_SMS|RECEIVE_SMS|SEND_SMS|WRITE_SMS|READ_CALL_LOG|WRITE_CALL_LOG|PROCESS_OUTGOING_CALLS|MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)|BIND_ACCESSIBILITY_SERVICE|AccessibilityService' "$MANIFEST"; then
+            echo "::error::Restricted or broad user-data access found in the merged manifest"
+            exit 1
+          fi
+          echo "::notice::Merged manifest passes the permission audit"
+
+      - name: Upload log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compile-check-log
+          path: ${{ env.WORKDIR }}/android/compile.log
+          if-no-files-found: ignore

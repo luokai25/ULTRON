@@ -127,6 +127,9 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation "androidx.work:work-runtime:2.9.0"
     implementation "com.google.android.gms:play-services-auth:21.3.0"
+    // Browser engine for per-account sign-in sessions. Pinned exactly: GeckoView makes no compatibility promise between builds.
+    // arm64 only (every current phone); the x86_64 emulator used by the release smoke test never opens the browser.
+    implementation "org.mozilla.geckoview:geckoview-arm64-v8a:153.0.20260810162159"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"

@@ -109,12 +109,12 @@ jobs:
       # Gradle is installed by the action rather than through a committed
       # gradle-wrapper.jar: the wrapper jar is a 63 KB binary, and the repository
       # deliberately carries no opaque binaries. The version is pinned here and
-      # must stay in step with the AGP version in android/build.gradle (AGP 8.2.1
+      # must stay in step with the AGP version in android/build.gradle (AGP 8.11.1
       # requires Gradle 8.2+).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.2.1"
+          gradle-version: "8.13"
 
       # `packages` must be explicit. The action's default is
       # "tools platform-tools", and the legacy `tools` package no longer exists
@@ -128,7 +128,7 @@ jobs:
       - name: Install Android platform and build tools
         run: |
           set -euo pipefail
-          sdkmanager --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+          sdkmanager --install "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
           yes | sdkmanager --licenses > /dev/null || true
 
       - name: Sync Capacitor
